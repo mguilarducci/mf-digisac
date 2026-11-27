@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/mguilarducci/mf-digisac/cmd/mf-digisac/cli/internal/config"
-	"github.com/mguilarducci/mf-digisac/cmd/mf-digisac/cli/internal/digisac"
+	"github.com/mguilarducci/mf-digisac/internal/config"
+	"github.com/mguilarducci/mf-digisac/internal/digisac"
 )
 
 var authCmd = &cobra.Command{

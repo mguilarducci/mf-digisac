@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mguilarducci/mf-digisac/cmd/mf-digisac/cli/internal/config"
-	"github.com/mguilarducci/mf-digisac/cmd/mf-digisac/cli/internal/digisac"
+	"github.com/mguilarducci/mf-digisac/internal/config"
+	"github.com/mguilarducci/mf-digisac/internal/digisac"
 )
 
 // Version will be linked by an ldflag during build.
-var Version = "v0.1.0-dev"
+var Version = "dev"
 
 var rootCmd = &cobra.Command{
 	Use:           "digisac",
@@ -21,6 +21,15 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	Run:           func(cmd *cobra.Command, args []string) { _ = cmd.Help() },
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the plugin version",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Fprintln(cmd.OutOrStdout(), "mf-digisac "+Version)
+	},
 }
 
 // Execute adds all child commands to the root command and runs it.
@@ -37,6 +46,7 @@ func init() {
 	if os.Getenv("MF_PLUGIN_NAME") != "" {
 		rootCmd.Annotations = map[string]string{cobra.CommandDisplayNameAnnotation: "mf digisac"}
 	}
+	rootCmd.AddCommand(versionCmd)
 	rootCmd.PersistentFlags().StringP("output", "o", "table", "Output format: table or json")
 }
 

@@ -1,0 +1,17 @@
+mf-digisac
+Copyright (c) 2026 Matheus Guilarducci
+
+This product includes material adapted from the following projects.
+Their full license texts are in third_party/licenses/.
+
+- entireio/entire-brain (https://github.com/entireio/entire-brain)
+  Copyright (c) 2026 Entire Inc.
+  MIT License: third_party/licenses/entireio-entire-brain.LICENSE
+  Used in: mise.toml, mise-tasks/lint/, .github/workflows/test.yml,
+  scripts/install-local.sh, scripts/get-digisac.sh
+
+- entireio/cli (https://github.com/entireio/cli)
+  Copyright (c) 2026 Entire Inc.
+  MIT License: third_party/licenses/entireio-cli.LICENSE
+  Used in: .goreleaser.yaml, .github/workflows/release.yml,
+  mise-tasks/release, .claude/skills/changelog/

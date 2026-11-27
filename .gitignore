@@ -225,3 +225,4 @@ __marimo__/
 # local
 mise.local.toml
 bin/
+dist/

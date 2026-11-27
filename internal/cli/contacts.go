@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mguilarducci/mf-digisac/cmd/mf-digisac/cli/internal/digisac"
+	"github.com/mguilarducci/mf-digisac/internal/digisac"
 )
 
 var contactsCmd = &cobra.Command{

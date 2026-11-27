@@ -1,0 +1,88 @@
+# Adapted from entireio/cli (MIT, see NOTICE). Signing, notarization, the S3
+# mirror, Homebrew/Scoop taps, nightlies and announcements are left out.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (semver with v prefix, e.g. v1.2.3)"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref_name }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: jdx/mise-action@f10502fc09dadecfefb962fff68ce77213930204 # v4
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          cache: false
+          go-version-file: go.mod
+
+      - name: Detect release type
+        id: release-type
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract release notes from CHANGELOG.md
+        if: steps.release-type.outputs.prerelease == 'false'
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          awk -v ver="$VERSION" 'BEGIN{header="^## \\[" ver "\\]"} $0 ~ header{found=1; next} /^## \[/{if(found) exit} found{print}' CHANGELOG.md > "$RUNNER_TEMP/release_notes.md"
+          if [ ! -s "$RUNNER_TEMP/release_notes.md" ]; then
+            echo "::error::No changelog entry found for version ${VERSION} in CHANGELOG.md"
+            exit 1
+          fi
+
+      - name: Generate prerelease notes
+        if: steps.release-type.outputs.prerelease == 'true'
+        run: |
+          BASE_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' HEAD 2>/dev/null || echo "")
+          echo "## Prerelease (${RELEASE_TAG})" > "$RUNNER_TEMP/release_notes.md"
+          echo "" >> "$RUNNER_TEMP/release_notes.md"
+          if [ -n "$BASE_TAG" ]; then
+            echo "Changes since ${BASE_TAG}:" >> "$RUNNER_TEMP/release_notes.md"
+            echo "" >> "$RUNNER_TEMP/release_notes.md"
+            git log --oneline "${BASE_TAG}..HEAD" --no-merges >> "$RUNNER_TEMP/release_notes.md"
+          fi
+
+      - name: Resolve GoReleaser version
+        id: goreleaser
+        run: |
+          version=$(sed -n "s/^goreleaser = '\(.*\)'$/\1/p" mise.toml)
+          [ -n "$version" ] || { echo "could not read the goreleaser version from mise.toml" >&2; exit 1; }
+          echo "version=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7
+        with:
+          distribution: goreleaser
+          version: ${{ steps.goreleaser.outputs.version }}
+          args: release --clean --release-notes=${{ runner.temp }}/release_notes.md
+        env:
+          GORELEASER_CURRENT_TAG: ${{ env.RELEASE_TAG }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
