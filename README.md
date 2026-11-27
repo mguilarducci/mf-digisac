@@ -10,6 +10,9 @@ curl -fsSL https://raw.githubusercontent.com/mguilarducci/mf-cli/main/scripts/in
 
 # this plugin: downloads the release, verifies its checksum, runs `mf plugin install`
 curl -fsSL https://raw.githubusercontent.com/mguilarducci/mf-digisac/main/scripts/get-digisac.sh | bash
+
+# or, with mf already installed
+mf plugin install digisac
 ```
 
 From a checkout: `mise run install`.
