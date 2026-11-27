@@ -1,0 +1,11 @@
+mf-digisac
+Copyright (c) 2026 Matheus Guilarducci
+
+This product includes material adapted from the following projects.
+Their full license texts are in third_party/licenses/.
+
+- entireio/entire-brain (https://github.com/entireio/entire-brain)
+  Copyright (c) 2026 Entire Inc.
+  MIT License: third_party/licenses/entireio-entire-brain.LICENSE
+  Used in: mise.toml, mise-tasks/, .github/workflows/, scripts/
+  (build, lint, CI, release, and installer)

@@ -1,0 +1,152 @@
+# Adapted from entireio/entire-brain (MIT, see NOTICE).
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. v0.1.0). Defaults to the pushed tag."
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    outputs:
+      bare: ${{ steps.v.outputs.bare }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Verify the default build needs no cgo
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -o /dev/null ./cmd/mf-digisac
+          echo "default build is pure Go"
+
+      - name: Resolve version
+        id: v
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME}"
+          elif [[ -n "${VERSION_INPUT}" ]]; then
+            version="${VERSION_INPUT}"
+          else
+            version="v0.0.0-dev.$(git rev-parse --short HEAD)"
+          fi
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::refusing to build an unrecognised version: ${version}"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "bare=${version#v}" >> "$GITHUB_OUTPUT"
+          echo "building ${version}"
+
+      - name: Build every target
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          OUT_DIR: dist
+        run: scripts/release.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-dist
+          path: dist/
+          retention-days: 7
+
+  verify:
+    name: verify ${{ matrix.os }}
+    needs: build
+    strategy:
+      matrix:
+        include:
+          - { os: linux, runner: ubuntu-latest, arch: amd64 }
+          - { os: darwin, runner: macos-latest, arch: arm64 }
+          - { os: windows, runner: windows-latest, arch: amd64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-dist
+          path: dist
+      - name: Smoke-run the released binary
+        shell: bash
+        env:
+          BARE: ${{ needs.build.outputs.bare }}
+        run: |
+          set -euo pipefail
+          asset="mf-digisac_${BARE}_${{ matrix.os }}_${{ matrix.arch }}"
+          mkdir -p out
+          if [ "${{ matrix.os }}" = windows ]; then
+            unzip -q "dist/${asset}.zip" -d out
+            bin=out/mf-digisac.exe
+          else
+            tar -xzf "dist/${asset}.tar.gz" -C out
+            bin=out/mf-digisac
+          fi
+          got="$("$bin" version)"
+          echo "$got"
+          [ "$got" = "mf-digisac ${BARE}" ]
+
+  publish:
+    name: publish
+    needs: [build, verify]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-dist
+          path: dist
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="${VERSION_INPUT}"
+          fi
+          [[ -n "$version" ]] || { echo "no version to publish" >&2; exit 1; }
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::refusing to publish an unrecognised version: ${version}"
+            exit 1
+          fi
+          mapfile -t assets < <(find dist -type f | sort)
+          if gh release view "$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $version exists — updating assets in place"
+            gh release upload "$version" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$version" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$version" \
+              --generate-notes
+          fi
