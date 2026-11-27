@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/mguilarducci/mf-digisac/cmd/mf-digisac/cli"
+	"github.com/mguilarducci/mf-digisac/internal/cli"
 )
 
 func main() {

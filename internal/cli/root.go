@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mguilarducci/mf-digisac/cmd/mf-digisac/cli/internal/config"
-	"github.com/mguilarducci/mf-digisac/cmd/mf-digisac/cli/internal/digisac"
+	"github.com/mguilarducci/mf-digisac/internal/config"
+	"github.com/mguilarducci/mf-digisac/internal/digisac"
 )
 
 // Version will be linked by an ldflag during build.
