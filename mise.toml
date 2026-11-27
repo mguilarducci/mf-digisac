@@ -1,0 +1,18 @@
+[tools]
+go = "1.27.4"
+
+# Credentials go in mise.local.toml (gitignored):
+#   [env]
+#   DIGISAC_URL = "https://your-company.digisac.io/api/v1"
+#   DIGISAC_TOKEN = "..."
+
+[tasks.build]
+run = "go build -o bin/mf-digisac ./cmd/mf-digisac"
+
+[tasks.install]
+description = "Build and register with mf as `mf digisac` (needs mf on PATH)"
+depends = ["build"]
+run = "mf plugin install ./bin/mf-digisac"
+
+[tasks.test]
+run = "go test ./..."
