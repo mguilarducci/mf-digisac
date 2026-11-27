@@ -18,5 +18,5 @@ CGO_ENABLED="${CGO_ENABLED:-0}" go build -trimpath \
 	-ldflags "-X github.com/mguilarducci/mf-digisac/internal/cli.Version=$version" \
 	-o bin/mf-digisac ./cmd/mf-digisac
 
-mf plugin install ./bin/mf-digisac
+mf plugin install ./bin/mf-digisac --force
 mf digisac version

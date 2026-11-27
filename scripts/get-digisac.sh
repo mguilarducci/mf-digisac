@@ -113,19 +113,19 @@ mv "${tmp}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
 info "installed to ${BOLD}${INSTALL_DIR}/${BINARY}${NC}"
 
 if command -v mf >/dev/null; then
-  if mf plugin install "${INSTALL_DIR}/${BINARY}" >/dev/null 2>&1; then
+  if mf plugin install "${INSTALL_DIR}/${BINARY}" --force >/dev/null 2>&1; then
     info "registered with the mf CLI"
     mf digisac version 2>/dev/null || true
     printf '%sNext:%s  mf digisac auth login\n' "$BOLD" "$NC"
   else
     warn "could not register the plugin automatically. Run:
-  mf plugin install ${INSTALL_DIR}/${BINARY}"
+  mf plugin install ${INSTALL_DIR}/${BINARY} --force"
   fi
 else
   warn "the mf CLI was not found on PATH. Install it first:
   curl -fsSL https://raw.githubusercontent.com/mguilarducci/mf-cli/main/scripts/install.sh | bash
 then run:
-  mf plugin install ${INSTALL_DIR}/${BINARY}"
+  mf plugin install ${INSTALL_DIR}/${BINARY} --force"
 fi
 
 case ":${PATH}:" in
