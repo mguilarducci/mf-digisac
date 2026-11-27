@@ -2,6 +2,8 @@
 
 [mf](https://github.com/mguilarducci/mf-cli) plugin for the Digisac API. Runs as `mf digisac`, or standalone as `mf-digisac`.
 
+API reference: [Digisac API docs (Postman)](https://documenter.getpostman.com/view/24605757/2sA3BhfaDg).
+
 ## Install
 
 ```sh
