@@ -37,16 +37,9 @@ var contactsListCmd = &cobra.Command{
 			return err
 		}
 
-		var contacts []digisac.Contact
-		for p := page; ; p++ {
-			res, err := c.ListContacts(cmd.Context(), digisac.ListContactsParams{Page: p, PerPage: perPage})
-			if err != nil {
-				return fmt.Errorf("list contacts: %w", err)
-			}
-			contacts = append(contacts, res.Data...)
-			if !all || len(res.Data) == 0 || (res.LastPage > 0 && p >= res.LastPage) {
-				break
-			}
+		contacts, err := c.ListContacts(cmd.Context(), digisac.ListContactsParams{Page: page, PerPage: perPage, All: all})
+		if err != nil {
+			return fmt.Errorf("list contacts: %w", err)
 		}
 
 		if isJSONOutput(cmd) {

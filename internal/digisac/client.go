@@ -20,8 +20,8 @@ func New(baseURL, token string) *Client {
 	return &Client{baseURL: baseURL, token: token, http: http.DefaultClient}
 }
 
-// Page is the paginated envelope returned by list endpoints.
-type Page[T any] struct {
+// page is the paginated envelope returned by list endpoints.
+type page[T any] struct {
 	Data     []T `json:"data"`
 	Total    int `json:"total"`
 	LastPage int `json:"lastPage"`
@@ -47,18 +47,39 @@ func (c *Contact) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// ListContactsParams selects which contacts to list. With All set, listing
+// starts at Page and continues through the last page.
 type ListContactsParams struct {
 	Page    int
 	PerPage int
+	All     bool
 }
 
-func (c *Client) ListContacts(ctx context.Context, p ListContactsParams) (*Page[Contact], error) {
-	q := url.Values{"page": {fmt.Sprint(p.Page)}, "perPage": {fmt.Sprint(p.PerPage)}}
-	var out Page[Contact]
-	if err := c.get(ctx, "/api/v1/contacts?"+q.Encode(), &out); err != nil {
-		return nil, err
+// ListContacts lists contacts (GET /api/v1/contacts).
+func (c *Client) ListContacts(ctx context.Context, p ListContactsParams) ([]Contact, error) {
+	return collectPages[Contact](ctx, c, "/api/v1/contacts", url.Values{}, p.Page, p.PerPage, p.All)
+}
+
+// collectPages fetches page start of path and, when all is set, every page
+// after it until the API reports the last page.
+func collectPages[T any](ctx context.Context, c *Client, path string, query url.Values, start, perPage int, all bool) ([]T, error) {
+	var items []T
+	for n := start; ; n++ {
+		q := url.Values{}
+		for k, v := range query {
+			q[k] = v
+		}
+		q.Set("page", fmt.Sprint(n))
+		q.Set("perPage", fmt.Sprint(perPage))
+		var res page[T]
+		if err := c.get(ctx, path+"?"+q.Encode(), &res); err != nil {
+			return nil, fmt.Errorf("page %d: %w", n, err)
+		}
+		items = append(items, res.Data...)
+		if !all || len(res.Data) == 0 || (res.LastPage > 0 && n >= res.LastPage) {
+			return items, nil
+		}
 	}
-	return &out, nil
 }
 
 // Me returns the authenticated user (GET /api/v1/me).
