@@ -1,152 +1,88 @@
-# Adapted from entireio/entire-brain (MIT, see NOTICE).
-name: release
+# Adapted from entireio/cli (MIT, see NOTICE). Signing, notarization, the S3
+# mirror, Homebrew/Scoop taps, nightlies and announcements are left out.
+name: Release
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g. v0.1.0). Defaults to the pushed tag."
-        required: false
+        description: "Release tag (semver with v prefix, e.g. v1.2.3)"
+        required: true
         type: string
-  pull_request:
-    paths:
-      - .github/workflows/release.yml
   push:
     tags:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
-concurrency:
-  group: release-${{ inputs.version || github.ref_name }}
-  cancel-in-progress: false
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref_name }}
 
 jobs:
-  build:
-    name: build
-    runs-on: ubuntu-latest
-    outputs:
-      bare: ${{ steps.v.outputs.bare }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-
-      - name: Verify the default build needs no cgo
-        run: |
-          set -euo pipefail
-          CGO_ENABLED=0 go build -o /dev/null ./cmd/mf-digisac
-          echo "default build is pure Go"
-
-      - name: Resolve version
-        id: v
-        env:
-          VERSION_INPUT: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            version="${GITHUB_REF_NAME}"
-          elif [[ -n "${VERSION_INPUT}" ]]; then
-            version="${VERSION_INPUT}"
-          else
-            version="v0.0.0-dev.$(git rev-parse --short HEAD)"
-          fi
-          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::refusing to build an unrecognised version: ${version}"
-            exit 1
-          fi
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "bare=${version#v}" >> "$GITHUB_OUTPUT"
-          echo "building ${version}"
-
-      - name: Build every target
-        env:
-          VERSION: ${{ steps.v.outputs.version }}
-          OUT_DIR: dist
-        run: scripts/release.sh
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: release-dist
-          path: dist/
-          retention-days: 7
-
-  verify:
-    name: verify ${{ matrix.os }}
-    needs: build
-    strategy:
-      matrix:
-        include:
-          - { os: linux, runner: ubuntu-latest, arch: amd64 }
-          - { os: darwin, runner: macos-latest, arch: arm64 }
-          - { os: windows, runner: windows-latest, arch: amd64 }
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-dist
-          path: dist
-      - name: Smoke-run the released binary
-        shell: bash
-        env:
-          BARE: ${{ needs.build.outputs.bare }}
-        run: |
-          set -euo pipefail
-          asset="mf-digisac_${BARE}_${{ matrix.os }}_${{ matrix.arch }}"
-          mkdir -p out
-          if [ "${{ matrix.os }}" = windows ]; then
-            unzip -q "dist/${asset}.zip" -d out
-            bin=out/mf-digisac.exe
-          else
-            tar -xzf "dist/${asset}.tar.gz" -C out
-            bin=out/mf-digisac
-          fi
-          got="$("$bin" version)"
-          echo "$got"
-          [ "$got" = "mf-digisac ${BARE}" ]
-
-  publish:
-    name: publish
-    needs: [build, verify]
-    if: github.event_name != 'pull_request'
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
-      - uses: actions/download-artifact@v8
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: jdx/mise-action@f10502fc09dadecfefb962fff68ce77213930204 # v4
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          name: release-dist
-          path: dist
-      - name: Create or update the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION_INPUT: ${{ inputs.version }}
+          cache: false
+          go-version-file: go.mod
+
+      - name: Detect release type
+        id: release-type
         run: |
-          set -euo pipefail
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            version="${GITHUB_REF_NAME}"
+          VERSION="${RELEASE_TAG#v}"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
-            version="${VERSION_INPUT}"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
-          [[ -n "$version" ]] || { echo "no version to publish" >&2; exit 1; }
-          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::refusing to publish an unrecognised version: ${version}"
+
+      - name: Extract release notes from CHANGELOG.md
+        if: steps.release-type.outputs.prerelease == 'false'
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          awk -v ver="$VERSION" 'BEGIN{header="^## \\[" ver "\\]"} $0 ~ header{found=1; next} /^## \[/{if(found) exit} found{print}' CHANGELOG.md > "$RUNNER_TEMP/release_notes.md"
+          if [ ! -s "$RUNNER_TEMP/release_notes.md" ]; then
+            echo "::error::No changelog entry found for version ${VERSION} in CHANGELOG.md"
             exit 1
           fi
-          mapfile -t assets < <(find dist -type f | sort)
-          if gh release view "$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "release $version exists — updating assets in place"
-            gh release upload "$version" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
-          else
-            gh release create "$version" "${assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$version" \
-              --generate-notes
+
+      - name: Generate prerelease notes
+        if: steps.release-type.outputs.prerelease == 'true'
+        run: |
+          BASE_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' HEAD 2>/dev/null || echo "")
+          echo "## Prerelease (${RELEASE_TAG})" > "$RUNNER_TEMP/release_notes.md"
+          echo "" >> "$RUNNER_TEMP/release_notes.md"
+          if [ -n "$BASE_TAG" ]; then
+            echo "Changes since ${BASE_TAG}:" >> "$RUNNER_TEMP/release_notes.md"
+            echo "" >> "$RUNNER_TEMP/release_notes.md"
+            git log --oneline "${BASE_TAG}..HEAD" --no-merges >> "$RUNNER_TEMP/release_notes.md"
           fi
+
+      - name: Resolve GoReleaser version
+        id: goreleaser
+        run: |
+          version=$(sed -n "s/^goreleaser = '\(.*\)'$/\1/p" mise.toml)
+          [ -n "$version" ] || { echo "could not read the goreleaser version from mise.toml" >&2; exit 1; }
+          echo "version=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7
+        with:
+          distribution: goreleaser
+          version: ${{ steps.goreleaser.outputs.version }}
+          args: release --clean --release-notes=${{ runner.temp }}/release_notes.md
+        env:
+          GORELEASER_CURRENT_TAG: ${{ env.RELEASE_TAG }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

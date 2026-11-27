@@ -82,7 +82,7 @@ fi
 
 info "Installing mf-digisac ${BOLD}${version}${NC} (${os}/${arch})"
 
-asset="${BINARY}_${version#v}_${os}_${arch}.tar.gz"
+asset="${BINARY}_${os}_${arch}.tar.gz"
 base="https://github.com/${GITHUB_REPO}/releases/download/${version}"
 
 curl -fsSL -o "${tmp}/${asset}" "${base}/${asset}" \

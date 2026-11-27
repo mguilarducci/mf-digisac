@@ -1,0 +1,68 @@
+# Adapted from entireio/cli's .goreleaser.yaml (MIT, see NOTICE).
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: mf-digisac
+    main: ./cmd/mf-digisac
+    binary: mf-digisac
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w
+      - -X github.com/mguilarducci/mf-digisac/internal/cli.Version={{.Version}}
+
+archives:
+  - id: mf-digisac
+    ids:
+      - mf-digisac
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "mf-digisac_{{ .Os }}_{{ .Arch }}"
+    files:
+      - src: LICENSE
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+      - src: NOTICE
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+      - src: README.md
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+      - src: mf-plugin.yml
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+      - src: third_party/licenses/*
+        info:
+          owner: root
+          group: root
+          mtime: "{{ .CommitDate }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  prerelease: auto
