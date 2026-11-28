@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
+	"io"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -35,7 +35,7 @@ func newContactsListCmd() *cobra.Command {
   # Every page, as JSON
   digisac contacts list --all -o json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runContactsList(cmd.Context(), isJSONOutput(cmd), p)
+			return runContactsList(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), isJSONOutput(cmd), p)
 		},
 	}
 	cmd.Flags().IntVar(&p.Page, "page", 1, "Page number")
@@ -44,7 +44,7 @@ func newContactsListCmd() *cobra.Command {
 	return cmd
 }
 
-func runContactsList(ctx context.Context, jsonOut bool, p digisac.ListContactsParams) error {
+func runContactsList(ctx context.Context, stdout, stderr io.Writer, jsonOut bool, p digisac.ListContactsParams) error {
 	c, err := clientFromConfig()
 	if err != nil {
 		return err
@@ -60,10 +60,10 @@ func runContactsList(ctx context.Context, jsonOut bool, p digisac.ListContactsPa
 		for i, ct := range contacts {
 			raw[i] = ct.Raw
 		}
-		return printJSON(os.Stdout, raw)
+		return printJSON(stdout, raw)
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "ID\tNAME\tNUMBER\tSERVICE")
 	for _, ct := range contacts {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ct.ID, ct.Name, ct.Data.Number, ct.ServiceID)
@@ -71,6 +71,6 @@ func runContactsList(ctx context.Context, jsonOut bool, p digisac.ListContactsPa
 	if err := w.Flush(); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "%d contacts\n", len(contacts))
+	fmt.Fprintf(stderr, "%d contacts\n", len(contacts))
 	return nil
 }
