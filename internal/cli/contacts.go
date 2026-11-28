@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
@@ -35,7 +34,11 @@ func newContactsListCmd() *cobra.Command {
   # Every page, as JSON
   digisac contacts list --all -o json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runContactsList(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), isJSONOutput(cmd), p)
+			format, err := listFormat(cmd)
+			if err != nil {
+				return err
+			}
+			return runContactsList(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), format, p)
 		},
 	}
 	cmd.Flags().IntVar(&p.Page, "page", 1, "Page number")
@@ -44,7 +47,17 @@ func newContactsListCmd() *cobra.Command {
 	return cmd
 }
 
-func runContactsList(ctx context.Context, stdout, stderr io.Writer, jsonOut bool, p digisac.ListContactsParams) error {
+// contactsView shows one contact per row and its raw API object as JSON.
+var contactsView = listView[digisac.Contact]{
+	noun:    "contacts",
+	headers: []string{"ID", "NAME", "NUMBER", "SERVICE"},
+	row: func(ct digisac.Contact) []string {
+		return []string{ct.ID, ct.Name, ct.Data.Number, ct.ServiceID}
+	},
+	raw: func(ct digisac.Contact) json.RawMessage { return ct.Raw },
+}
+
+func runContactsList(ctx context.Context, stdout, stderr io.Writer, format outputFormat, p digisac.ListContactsParams) error {
 	c, err := digisac.New()
 	if err != nil {
 		return err
@@ -54,23 +67,5 @@ func runContactsList(ctx context.Context, stdout, stderr io.Writer, jsonOut bool
 	if err != nil {
 		return fmt.Errorf("list contacts: %w", err)
 	}
-
-	if jsonOut {
-		raw := make([]json.RawMessage, len(contacts))
-		for i, ct := range contacts {
-			raw[i] = ct.Raw
-		}
-		return printJSON(stdout, raw)
-	}
-
-	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tNUMBER\tSERVICE")
-	for _, ct := range contacts {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ct.ID, ct.Name, ct.Data.Number, ct.ServiceID)
-	}
-	if err := w.Flush(); err != nil {
-		return err
-	}
-	fmt.Fprintf(stderr, "%d contacts\n", len(contacts))
-	return nil
+	return renderList(stdout, stderr, format, contacts, contactsView)
 }
