@@ -41,7 +41,7 @@ func TestContactsListAll(t *testing.T) {
 	if !strings.Contains(stderr, "3 contacts\n") {
 		t.Errorf("stderr = %q, want it to report 3 contacts", stderr)
 	}
-	if got, want := srv.requestedContactPages(), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
+	if got, want := pageNumbers(srv.requestedQueries(contactsPath)), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("requested pages %v, want %v (stop at lastPage)", got, want)
 	}
 }
@@ -49,12 +49,12 @@ func TestContactsListAll(t *testing.T) {
 func TestContactsListAllStopsOnEmptyPage(t *testing.T) {
 	// lastPage claims 5 pages, but data ends on page 1: page 2 comes back
 	// empty, so --all must stop there instead of asking for page 3.
-	srv := fakeDigisacWithContacts(t, map[string]string{
+	srv := fakeDigisac(t, routes{contactsPath: {
 		"1": `{"data":[` +
 			`{"id":"c1","name":"Ada Lovelace","serviceId":"s1","data":{"number":"5511999990001"}}` +
 			`],"total":1,"lastPage":5}`,
 		"2": `{"data":[],"total":1,"lastPage":5}`,
-	})
+	}})
 
 	stdout, _, err := run(t, envCredentials(srv), "", "contacts", "list", "--all")
 	if err != nil {
@@ -65,7 +65,7 @@ func TestContactsListAllStopsOnEmptyPage(t *testing.T) {
 	if stdout != want {
 		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
 	}
-	if got, want := srv.requestedContactPages(), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
+	if got, want := pageNumbers(srv.requestedQueries(contactsPath)), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("requested pages %v, want %v (stop on empty page)", got, want)
 	}
 }
@@ -75,12 +75,12 @@ func TestContactsListJSONIsRawAPIObjects(t *testing.T) {
 	// alphabetical order, non-ASCII text and HTML-sensitive characters. -o
 	// json must print them as the API sent them, except that <, > and & are
 	// escaped as \u003c, \u003e and \u0026.
-	srv := fakeDigisacWithContacts(t, map[string]string{
+	srv := fakeDigisac(t, routes{contactsPath: {
 		"1": `{"data":[` +
 			`{"name":"José Ñúñez","id":"c1","serviceId":"s1","tags":["vip","São Paulo"],"note":"Tom & Jerry <tj@example.com>","data":{"number":"5511999990001","extra":true}},` +
 			`{"zeta":1,"id":"c2","name":"Zoë 日本","serviceId":"s2","data":{"number":"5511999990002"},"alpha":null}` +
 			`],"total":2,"lastPage":1}`,
-	})
+	}})
 
 	stdout, stderr, err := run(t, envCredentials(srv), "", "contacts", "list", "-o", "json")
 	if err != nil {
@@ -122,9 +122,9 @@ func TestContactsListJSONIsRawAPIObjects(t *testing.T) {
 }
 
 func TestContactsListEmptyTable(t *testing.T) {
-	srv := fakeDigisacWithContacts(t, map[string]string{
+	srv := fakeDigisac(t, routes{contactsPath: {
 		"1": `{"data":[],"total":0,"lastPage":1}`,
-	})
+	}})
 
 	stdout, stderr, err := run(t, envCredentials(srv), "", "contacts", "list")
 	if err != nil {
@@ -139,9 +139,9 @@ func TestContactsListEmptyTable(t *testing.T) {
 }
 
 func TestContactsListEmptyJSON(t *testing.T) {
-	srv := fakeDigisacWithContacts(t, map[string]string{
+	srv := fakeDigisac(t, routes{contactsPath: {
 		"1": `{"data":[],"total":0,"lastPage":1}`,
-	})
+	}})
 
 	stdout, stderr, err := run(t, envCredentials(srv), "", "contacts", "list", "-o", "json")
 	if err != nil {

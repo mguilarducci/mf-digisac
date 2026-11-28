@@ -62,36 +62,106 @@ func (c *Contact) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// ListContactsParams selects which contacts to list. With All set, listing
-// starts at Page and continues through the last page.
-type ListContactsParams struct {
+// PageParams selects which pages a list call fetches: page Page of PerPage
+// items or, with All set, every page from Page through the last page.
+type PageParams struct {
 	Page    int
 	PerPage int
 	All     bool
 }
 
-// ListContacts lists contacts (GET /api/v1/contacts).
-func (c *Client) ListContacts(ctx context.Context, p ListContactsParams) ([]Contact, error) {
-	return collectPages[Contact](ctx, c, "/api/v1/contacts", url.Values{}, p.Page, p.PerPage, p.All)
+// ListContactsParams selects which contacts to list.
+type ListContactsParams struct {
+	PageParams
 }
 
-// collectPages fetches page start of path and, when all is set, every page
-// after it until the API reports the last page.
-func collectPages[T any](ctx context.Context, c *Client, path string, query url.Values, start, perPage int, all bool) ([]T, error) {
+// ListContacts lists contacts (GET /api/v1/contacts).
+func (c *Client) ListContacts(ctx context.Context, p ListContactsParams) ([]Contact, error) {
+	return collectPages[Contact](ctx, c, "/api/v1/contacts", url.Values{}, p.PageParams)
+}
+
+// MessageType is the kind of a message as the API names it, such as "chat",
+// "image", or one of the internal entries below.
+type MessageType string
+
+// Internal entries: they record what happened in the conversation rather
+// than something the contact or an agent sent.
+const (
+	MessageTypeTicket  MessageType = "ticket"
+	MessageTypeComment MessageType = "comment"
+)
+
+// Message keeps the fields the CLI prints; Raw holds the full object.
+type Message struct {
+	ID        string          `json:"id"`
+	Timestamp string          `json:"timestamp"`
+	IsFromMe  bool            `json:"isFromMe"`
+	Type      MessageType     `json:"type"`
+	Text      string          `json:"text"`
+	Raw       json.RawMessage `json:"-"`
+}
+
+// UnmarshalJSON decodes a message, tolerating a text that is not a string
+// (the API owns that shape): such a text is treated as empty.
+func (m *Message) UnmarshalJSON(b []byte) error {
+	type alias Message
+	aux := struct {
+		*alias
+
+		Text json.RawMessage `json:"text"`
+	}{alias: (*alias)(m)}
+	if err := json.Unmarshal(b, &aux); err != nil {
+		return fmt.Errorf("decode message: %w", err)
+	}
+	m.Text = stringOrEmpty(aux.Text)
+	m.Raw = append(json.RawMessage(nil), b...)
+	return nil
+}
+
+// stringOrEmpty returns raw as a string if it is a JSON string, else "".
+func stringOrEmpty(raw json.RawMessage) string {
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return ""
+	}
+	return s
+}
+
+// ListMessagesParams selects which messages to list: those of ContactID.
+type ListMessagesParams struct {
+	PageParams
+
+	ContactID string
+}
+
+// ListMessages lists one contact's messages, newest first
+// (GET /api/v1/messages). The order is always sent explicitly because the
+// API's default order is unknown.
+func (c *Client) ListMessages(ctx context.Context, p ListMessagesParams) ([]Message, error) {
+	q := url.Values{}
+	q.Set("where[contactId]", p.ContactID)
+	q.Set("order[0][0]", "timestamp")
+	q.Set("order[0][1]", "DESC")
+	return collectPages[Message](ctx, c, "/api/v1/messages", q, p.PageParams)
+}
+
+// collectPages fetches the pages of path that p selects, stopping early on
+// an empty page or once the API reports the last page.
+func collectPages[T any](ctx context.Context, c *Client, path string, query url.Values, p PageParams) ([]T, error) {
 	var items []T
-	for n := start; ; n++ {
+	for n := p.Page; ; n++ {
 		q := url.Values{}
 		for k, v := range query {
 			q[k] = v
 		}
 		q.Set("page", strconv.Itoa(n))
-		q.Set("perPage", strconv.Itoa(perPage))
+		q.Set("perPage", strconv.Itoa(p.PerPage))
 		var res page[T]
 		if err := c.get(ctx, path+"?"+q.Encode(), &res); err != nil {
 			return nil, fmt.Errorf("page %d: %w", n, err)
 		}
 		items = append(items, res.Data...)
-		if !all || len(res.Data) == 0 || (res.LastPage > 0 && n >= res.LastPage) {
+		if !p.All || len(res.Data) == 0 || (res.LastPage > 0 && n >= res.LastPage) {
 			return items, nil
 		}
 	}
