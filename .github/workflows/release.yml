@@ -38,38 +38,6 @@ jobs:
           cache: false
           go-version-file: go.mod
 
-      - name: Detect release type
-        id: release-type
-        run: |
-          VERSION="${RELEASE_TAG#v}"
-          if [[ "$VERSION" == *-* ]]; then
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Extract release notes from CHANGELOG.md
-        if: steps.release-type.outputs.prerelease == 'false'
-        run: |
-          VERSION="${RELEASE_TAG#v}"
-          awk -v ver="$VERSION" 'BEGIN{header="^## \\[" ver "\\]"} $0 ~ header{found=1; next} /^## \[/{if(found) exit} found{print}' CHANGELOG.md > "$RUNNER_TEMP/release_notes.md"
-          if [ ! -s "$RUNNER_TEMP/release_notes.md" ]; then
-            echo "::error::No changelog entry found for version ${VERSION} in CHANGELOG.md"
-            exit 1
-          fi
-
-      - name: Generate prerelease notes
-        if: steps.release-type.outputs.prerelease == 'true'
-        run: |
-          BASE_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' HEAD 2>/dev/null || echo "")
-          echo "## Prerelease (${RELEASE_TAG})" > "$RUNNER_TEMP/release_notes.md"
-          echo "" >> "$RUNNER_TEMP/release_notes.md"
-          if [ -n "$BASE_TAG" ]; then
-            echo "Changes since ${BASE_TAG}:" >> "$RUNNER_TEMP/release_notes.md"
-            echo "" >> "$RUNNER_TEMP/release_notes.md"
-            git log --oneline "${BASE_TAG}..HEAD" --no-merges >> "$RUNNER_TEMP/release_notes.md"
-          fi
-
       - name: Resolve GoReleaser version
         id: goreleaser
         run: |
@@ -82,7 +50,7 @@ jobs:
         with:
           distribution: goreleaser
           version: ${{ steps.goreleaser.outputs.version }}
-          args: release --clean --release-notes=${{ runner.temp }}/release_notes.md
+          args: release --clean
         env:
           GORELEASER_CURRENT_TAG: ${{ env.RELEASE_TAG }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -16,4 +16,4 @@ Their full license texts are in third_party/licenses/.
   Used in: .goreleaser.yaml, .golangci.yaml, .github/workflows/release.yml,
   .github/workflows/govulncheck.yml, the golangci-lint steps of
   .github/workflows/test.yml, mise-tasks/release, mise-tasks/lint/go,
-  mise-tasks/lint/vuln, .claude/skills/changelog/
+  mise-tasks/lint/vuln
