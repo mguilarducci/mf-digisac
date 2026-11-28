@@ -41,9 +41,7 @@ func newContactsListCmd() *cobra.Command {
 			return runContactsList(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), format, p)
 		},
 	}
-	cmd.Flags().IntVar(&p.Page, "page", 1, "Page number")
-	cmd.Flags().IntVar(&p.PerPage, "per-page", 40, "Items per page")
-	cmd.Flags().BoolVar(&p.All, "all", false, "Fetch every page")
+	bindPageFlags(cmd.Flags(), &p.PageParams)
 	return cmd
 }
 

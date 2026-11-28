@@ -8,6 +8,9 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+
+	"github.com/mguilarducci/mf-digisac/internal/digisac"
 )
 
 // outputFormat is how a list command renders its items.
@@ -32,6 +35,14 @@ func listFormat(cmd *cobra.Command) (outputFormat, error) {
 		return formatJSON, nil
 	}
 	return 0, fmt.Errorf("unknown output format %q (want table or json)", out)
+}
+
+// bindPageFlags binds the --page, --per-page and --all flags of a list
+// command to p.
+func bindPageFlags(fs *pflag.FlagSet, p *digisac.PageParams) {
+	fs.IntVar(&p.Page, "page", 1, "Page number")
+	fs.IntVar(&p.PerPage, "per-page", 40, "Items per page")
+	fs.BoolVar(&p.All, "all", false, "Fetch every page")
 }
 
 // listView declares how a list command shows its items.

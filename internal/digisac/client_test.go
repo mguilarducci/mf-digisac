@@ -38,7 +38,7 @@ func TestListContacts(t *testing.T) {
 		}
 	})
 
-	contacts, err := c.ListContacts(context.Background(), ListContactsParams{Page: 2, PerPage: 10})
+	contacts, err := c.ListContacts(context.Background(), ListContactsParams{PageParams{Page: 2, PerPage: 10}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestInvalidJSONResponse(t *testing.T) {
 		}
 	})
 
-	if _, err := c.ListContacts(context.Background(), ListContactsParams{Page: 1, PerPage: 1}); err == nil {
+	if _, err := c.ListContacts(context.Background(), ListContactsParams{PageParams{Page: 1, PerPage: 1}}); err == nil {
 		t.Error("want error for non-JSON body, got nil")
 	}
 }
@@ -143,7 +143,7 @@ func TestListContactsAllStopsAtLastPage(t *testing.T) {
 		4: contactJSON("never"),
 	})
 
-	contacts, err := c.ListContacts(context.Background(), ListContactsParams{Page: 1, PerPage: 2, All: true})
+	contacts, err := c.ListContacts(context.Background(), ListContactsParams{PageParams{Page: 1, PerPage: 2, All: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestListContactsAllStopsOnEmptyPageWithoutLastPage(t *testing.T) {
 		4: contactJSON("never"),
 	})
 
-	contacts, err := c.ListContacts(context.Background(), ListContactsParams{Page: 1, PerPage: 1, All: true})
+	contacts, err := c.ListContacts(context.Background(), ListContactsParams{PageParams{Page: 1, PerPage: 1, All: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestListContactsAllStartsAtGivenPage(t *testing.T) {
 		3: contactJSON("c"),
 	})
 
-	contacts, err := c.ListContacts(context.Background(), ListContactsParams{Page: 2, PerPage: 1, All: true})
+	contacts, err := c.ListContacts(context.Background(), ListContactsParams{PageParams{Page: 2, PerPage: 1, All: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestListContactsAllErrorOnLaterPage(t *testing.T) {
 		}
 	})
 
-	contacts, err := c.ListContacts(context.Background(), ListContactsParams{Page: 1, PerPage: 1, All: true})
+	contacts, err := c.ListContacts(context.Background(), ListContactsParams{PageParams{Page: 1, PerPage: 1, All: true}})
 	if err == nil {
 		t.Fatal("expected error")
 	}

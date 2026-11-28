@@ -27,7 +27,7 @@ func NewRootCmd() *cobra.Command {
 		cmd.Annotations = map[string]string{cobra.CommandDisplayNameAnnotation: "mf digisac"}
 	}
 	cmd.PersistentFlags().StringP("output", "o", "table", "Output format: table or json")
-	cmd.AddCommand(newVersionCmd(), newAuthCmd(), newContactsCmd())
+	cmd.AddCommand(newVersionCmd(), newAuthCmd(), newContactsCmd(), newMessagesCmd())
 	return cmd
 }
 

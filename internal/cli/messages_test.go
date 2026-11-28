@@ -1,0 +1,247 @@
+package cli
+
+import (
+	"net/url"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestMessagesListFirstPage(t *testing.T) {
+	srv := fakeDigisac(t)
+
+	stdout, stderr, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
+	if err != nil {
+		t.Fatalf("messages list: %v", err)
+	}
+	want := "ID  TIME                      FROM     TYPE  TEXT\n" +
+		"m2  2026-11-20T10:05:00.000Z  me       chat  Hi Ada, how can I help?\n" +
+		"m1  2026-11-20T10:00:00.000Z  contact  chat  Hello\n"
+	if stdout != want {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
+	}
+	if !strings.Contains(stderr, "2 messages\n") {
+		t.Errorf("stderr = %q, want it to report 2 messages", stderr)
+	}
+}
+
+func TestMessagesListRequestQuery(t *testing.T) {
+	srv := fakeDigisac(t)
+
+	if _, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1", "--page", "2", "--per-page", "10"); err != nil {
+		t.Fatalf("messages list: %v", err)
+	}
+	want := []url.Values{{
+		"where[contactId]": {"c1"},
+		"order[0][0]":      {"timestamp"},
+		"order[0][1]":      {"DESC"},
+		"page":             {"2"},
+		"perPage":          {"10"},
+	}}
+	if got := srv.requestedQueries(messagesPath); !reflect.DeepEqual(got, want) {
+		t.Errorf("requested queries %v, want %v", got, want)
+	}
+}
+
+func TestMessagesListRequiresContact(t *testing.T) {
+	srv := fakeDigisac(t)
+
+	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list")
+	if err == nil {
+		t.Fatal("messages list without --contact succeeded, want an error")
+	}
+	if !strings.Contains(err.Error(), `"contact"`) {
+		t.Errorf("error = %q, want it to name the contact flag", err)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want empty", stdout)
+	}
+	if got := srv.requestedQueries(messagesPath); len(got) != 0 {
+		t.Errorf("requested queries %v, want none", got)
+	}
+}
+
+func TestMessagesListAll(t *testing.T) {
+	srv := fakeDigisac(t)
+
+	stdout, stderr, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1", "--all")
+	if err != nil {
+		t.Fatalf("messages list --all: %v", err)
+	}
+	want := "ID  TIME                      FROM     TYPE   TEXT\n" +
+		"m2  2026-11-20T10:05:00.000Z  me       chat   Hi Ada, how can I help?\n" +
+		"m1  2026-11-20T10:00:00.000Z  contact  chat   Hello\n" +
+		"m0  2026-11-19T18:30:00.000Z  contact  image  \n"
+	if stdout != want {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
+	}
+	if !strings.Contains(stderr, "3 messages\n") {
+		t.Errorf("stderr = %q, want it to report 3 messages", stderr)
+	}
+	if got, want := pageNumbers(srv.requestedQueries(messagesPath)), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("requested pages %v, want %v (stop at lastPage)", got, want)
+	}
+}
+
+func TestMessagesListAllStopsOnEmptyPage(t *testing.T) {
+	// lastPage claims 5 pages, but data ends on page 1: page 2 comes back
+	// empty, so --all must stop there instead of asking for page 3.
+	srv := fakeDigisac(t, routes{messagesPath: {
+		"1": `{"data":[` +
+			`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"type":"chat","text":"Hello"}` +
+			`],"total":1,"lastPage":5}`,
+		"2": `{"data":[],"total":1,"lastPage":5}`,
+	}})
+
+	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1", "--all")
+	if err != nil {
+		t.Fatalf("messages list --all: %v", err)
+	}
+	want := "ID  TIME                      FROM     TYPE  TEXT\n" +
+		"m1  2026-11-20T10:00:00.000Z  contact  chat  Hello\n"
+	if stdout != want {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
+	}
+	if got, want := pageNumbers(srv.requestedQueries(messagesPath)), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("requested pages %v, want %v (stop on empty page)", got, want)
+	}
+}
+
+func TestMessagesListJSONIsRawAPIObjects(t *testing.T) {
+	// Each message carries fields the CLI does not model and keys out of
+	// alphabetical order. -o json must print them as the API sent them.
+	srv := fakeDigisac(t, routes{messagesPath: {
+		"1": `{"data":[` +
+			`{"text":"Olá, tudo bem?","id":"m1","isFromMe":false,"type":"chat","timestamp":"2026-11-20T10:00:00.000Z","contactId":"c1","data":{"ack":3}},` +
+			`{"zeta":1,"id":"m2","isFromMe":true,"type":"image","text":null,"timestamp":"2026-11-20T10:05:00.000Z"}` +
+			`],"total":2,"lastPage":1}`,
+	}})
+
+	stdout, stderr, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1", "-o", "json")
+	if err != nil {
+		t.Fatalf("messages list -o json: %v", err)
+	}
+	want := `[
+  {
+    "text": "Olá, tudo bem?",
+    "id": "m1",
+    "isFromMe": false,
+    "type": "chat",
+    "timestamp": "2026-11-20T10:00:00.000Z",
+    "contactId": "c1",
+    "data": {
+      "ack": 3
+    }
+  },
+  {
+    "zeta": 1,
+    "id": "m2",
+    "isFromMe": true,
+    "type": "image",
+    "text": null,
+    "timestamp": "2026-11-20T10:05:00.000Z"
+  }
+]
+`
+	if stdout != want {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
+	}
+	if stderr != "" {
+		t.Errorf("stderr = %q, want empty", stderr)
+	}
+}
+
+func TestMessagesListEmptyJSON(t *testing.T) {
+	// An unknown contact, or one without messages, is just an empty listing.
+	srv := fakeDigisac(t, routes{messagesPath: {
+		"1": `{"data":[],"total":0,"lastPage":1}`,
+	}})
+
+	stdout, stderr, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "unknown", "-o", "json")
+	if err != nil {
+		t.Fatalf("messages list -o json: %v", err)
+	}
+	if want := "[]\n"; stdout != want {
+		t.Errorf("stdout = %q, want %q", stdout, want)
+	}
+	if stderr != "" {
+		t.Errorf("stderr = %q, want empty", stderr)
+	}
+}
+
+func TestMessagesListRejectsUnknownOutputFormat(t *testing.T) {
+	srv := fakeDigisac(t)
+
+	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1", "-o", "yaml")
+	if err == nil {
+		t.Fatal("messages list -o yaml succeeded, want an error")
+	}
+	if want := `unknown output format "yaml" (want table or json)`; !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err, want)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want empty", stdout)
+	}
+}
+
+func TestMessagesListRejectsBlankContact(t *testing.T) {
+	for _, contact := range []string{"", "   "} {
+		srv := fakeDigisac(t)
+
+		stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", contact)
+		if err == nil {
+			t.Fatalf("messages list --contact %q succeeded, want an error", contact)
+		}
+		if want := "--contact must not be empty"; !strings.Contains(err.Error(), want) {
+			t.Errorf("--contact %q: error = %q, want it to contain %q", contact, err, want)
+		}
+		if stdout != "" {
+			t.Errorf("--contact %q: stdout = %q, want empty", contact, stdout)
+		}
+		if got := srv.requestedQueries(messagesPath); len(got) != 0 {
+			t.Errorf("--contact %q: requested queries %v, want none", contact, got)
+		}
+	}
+}
+
+func TestMessagesListDefaultPaging(t *testing.T) {
+	srv := fakeDigisac(t)
+
+	if _, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1"); err != nil {
+		t.Fatalf("messages list: %v", err)
+	}
+	queries := srv.requestedQueries(messagesPath)
+	if len(queries) != 1 {
+		t.Fatalf("requested %d queries, want 1", len(queries))
+	}
+	if got := queries[0].Get("page"); got != "1" {
+		t.Errorf("page = %q, want %q", got, "1")
+	}
+	if got := queries[0].Get("perPage"); got != "40" {
+		t.Errorf("perPage = %q, want %q", got, "40")
+	}
+}
+
+func TestMessagesListNonStringTextCountsAsEmpty(t *testing.T) {
+	// The API owns the shape of text; a number, object or bool there must
+	// not break the listing. It is shown like an empty text.
+	srv := fakeDigisac(t, routes{messagesPath: {
+		"1": `{"data":[` +
+			`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"type":"chat","text":42},` +
+			`{"id":"m2","timestamp":"2026-11-20T10:01:00.000Z","isFromMe":false,"type":"chat","text":{"body":"hi"}},` +
+			`{"id":"m3","timestamp":"2026-11-20T10:02:00.000Z","isFromMe":false,"type":"chat","text":true}` +
+			`],"total":3,"lastPage":1}`,
+	}})
+
+	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
+	if err != nil {
+		t.Fatalf("messages list: %v", err)
+	}
+	want := "ID  TIME                      FROM     TYPE  TEXT\n" +
+		"m1  2026-11-20T10:00:00.000Z  contact  chat  \n" +
+		"m2  2026-11-20T10:01:00.000Z  contact  chat  \n" +
+		"m3  2026-11-20T10:02:00.000Z  contact  chat  \n"
+	if stdout != want {
+		t.Errorf("stdout =\n%q\nwant\n%q", stdout, want)
+	}
+}
