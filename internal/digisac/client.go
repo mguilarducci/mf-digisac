@@ -62,17 +62,22 @@ func (c *Contact) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// ListContactsParams selects which contacts to list. With All set, listing
-// starts at Page and continues through the last page.
-type ListContactsParams struct {
+// PageParams selects which pages a list call fetches: page Page of PerPage
+// items or, with All set, every page from Page through the last page.
+type PageParams struct {
 	Page    int
 	PerPage int
 	All     bool
 }
 
+// ListContactsParams selects which contacts to list.
+type ListContactsParams struct {
+	PageParams
+}
+
 // ListContacts lists contacts (GET /api/v1/contacts).
 func (c *Client) ListContacts(ctx context.Context, p ListContactsParams) ([]Contact, error) {
-	return collectPages[Contact](ctx, c, "/api/v1/contacts", url.Values{}, p.Page, p.PerPage, p.All)
+	return collectPages[Contact](ctx, c, "/api/v1/contacts", url.Values{}, p.PageParams)
 }
 
 // Message keeps the fields the CLI prints; Raw holds the full object.
@@ -94,13 +99,11 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// ListMessagesParams selects which messages to list: those of ContactID. With
-// All set, listing starts at Page and continues through the last page.
+// ListMessagesParams selects which messages to list: those of ContactID.
 type ListMessagesParams struct {
+	PageParams
+
 	ContactID string
-	Page      int
-	PerPage   int
-	All       bool
 }
 
 // ListMessages lists one contact's messages, newest first
@@ -111,26 +114,26 @@ func (c *Client) ListMessages(ctx context.Context, p ListMessagesParams) ([]Mess
 	q.Set("where[contactId]", p.ContactID)
 	q.Set("order[0][0]", "timestamp")
 	q.Set("order[0][1]", "DESC")
-	return collectPages[Message](ctx, c, "/api/v1/messages", q, p.Page, p.PerPage, p.All)
+	return collectPages[Message](ctx, c, "/api/v1/messages", q, p.PageParams)
 }
 
-// collectPages fetches page start of path and, when all is set, every page
-// after it until the API reports the last page.
-func collectPages[T any](ctx context.Context, c *Client, path string, query url.Values, start, perPage int, all bool) ([]T, error) {
+// collectPages fetches the pages of path that p selects, stopping early on
+// an empty page or once the API reports the last page.
+func collectPages[T any](ctx context.Context, c *Client, path string, query url.Values, p PageParams) ([]T, error) {
 	var items []T
-	for n := start; ; n++ {
+	for n := p.Page; ; n++ {
 		q := url.Values{}
 		for k, v := range query {
 			q[k] = v
 		}
 		q.Set("page", strconv.Itoa(n))
-		q.Set("perPage", strconv.Itoa(perPage))
+		q.Set("perPage", strconv.Itoa(p.PerPage))
 		var res page[T]
 		if err := c.get(ctx, path+"?"+q.Encode(), &res); err != nil {
 			return nil, fmt.Errorf("page %d: %w", n, err)
 		}
 		items = append(items, res.Data...)
-		if !all || len(res.Data) == 0 || (res.LastPage > 0 && n >= res.LastPage) {
+		if !p.All || len(res.Data) == 0 || (res.LastPage > 0 && n >= res.LastPage) {
 			return items, nil
 		}
 	}
