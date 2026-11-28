@@ -60,24 +60,9 @@ var messagesView = listView[digisac.Message]{
 	noun:    "messages",
 	headers: []string{"ID", "TIME", "FROM", "TYPE", "TEXT"},
 	row: func(m digisac.Message) []string {
-		return []string{m.ID, m.Timestamp, messageSender(m), string(m.Type), messageText(m)}
+		return []string{m.ID, m.Timestamp, string(m.Sender()), string(m.Type), messageText(m)}
 	},
 	raw: func(m digisac.Message) json.RawMessage { return m.Raw },
-}
-
-// messageSender names who sent m: "system" for internal entries, else "bot",
-// "me" or "contact", in that order of precedence.
-func messageSender(m digisac.Message) string {
-	switch {
-	case m.Type == digisac.MessageTypeTicket || m.Type == digisac.MessageTypeComment:
-		return "system"
-	case m.IsFromBot:
-		return "bot"
-	case m.IsFromMe:
-		return "me"
-	default:
-		return "contact"
-	}
 }
 
 // oneLine returns s with each CRLF and each other control character (line

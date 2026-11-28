@@ -120,6 +120,31 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Sender is who sent a message.
+type Sender string
+
+const (
+	SenderSystem  Sender = "system"  // an internal entry (see MessageTypeTicket)
+	SenderBot     Sender = "bot"     // a bot, on the company's side
+	SenderMe      Sender = "me"      // an agent of the company
+	SenderContact Sender = "contact" // the contact
+)
+
+// Sender names who sent m: SenderSystem for internal entries, else
+// SenderBot, SenderMe or SenderContact, in that order of precedence.
+func (m Message) Sender() Sender {
+	switch {
+	case m.Type == MessageTypeTicket || m.Type == MessageTypeComment:
+		return SenderSystem
+	case m.IsFromBot:
+		return SenderBot
+	case m.IsFromMe:
+		return SenderMe
+	default:
+		return SenderContact
+	}
+}
+
 // IsDeleted reports whether m was deleted.
 func (m Message) IsDeleted() bool {
 	return m.DeletedAt != ""
