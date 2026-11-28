@@ -96,7 +96,7 @@ func oneLine(s string) string {
 // message, [<type>] for one whose text is empty or only whitespace, otherwise
 // its full text on one line (see oneLine).
 func messageText(m digisac.Message) string {
-	if m.DeletedAt != "" {
+	if m.IsDeleted() {
 		return "[deleted]"
 	}
 	if text := oneLine(m.Text); strings.TrimSpace(text) != "" {

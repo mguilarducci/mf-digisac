@@ -120,6 +120,11 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// IsDeleted reports whether m was deleted.
+func (m Message) IsDeleted() bool {
+	return m.DeletedAt != ""
+}
+
 // stringOrEmpty returns raw as a string if it is a JSON string, else "".
 func stringOrEmpty(raw json.RawMessage) string {
 	var s string
