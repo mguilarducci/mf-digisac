@@ -230,3 +230,27 @@ func TestMessagesListDefaultPaging(t *testing.T) {
 		t.Errorf("perPage = %q, want %q", got, "40")
 	}
 }
+
+func TestMessagesListNonStringTextCountsAsEmpty(t *testing.T) {
+	// The API owns the shape of text; a number, object or bool there must
+	// not break the listing. It is shown like an empty text.
+	srv := fakeDigisacWithMessages(t, map[string]string{
+		"1": `{"data":[` +
+			`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"type":"chat","text":42},` +
+			`{"id":"m2","timestamp":"2026-11-20T10:01:00.000Z","isFromMe":false,"type":"chat","text":{"body":"hi"}},` +
+			`{"id":"m3","timestamp":"2026-11-20T10:02:00.000Z","isFromMe":false,"type":"chat","text":true}` +
+			`],"total":3,"lastPage":1}`,
+	})
+
+	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
+	if err != nil {
+		t.Fatalf("messages list: %v", err)
+	}
+	want := "ID  TIME                      FROM     TYPE  TEXT\n" +
+		"m1  2026-11-20T10:00:00.000Z  contact  chat  \n" +
+		"m2  2026-11-20T10:01:00.000Z  contact  chat  \n" +
+		"m3  2026-11-20T10:02:00.000Z  contact  chat  \n"
+	if stdout != want {
+		t.Errorf("stdout =\n%q\nwant\n%q", stdout, want)
+	}
+}

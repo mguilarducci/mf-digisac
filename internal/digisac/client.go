@@ -101,13 +101,30 @@ type Message struct {
 	Raw       json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON decodes a message, tolerating a text that is not a string
+// (the API owns that shape): such a text is treated as empty.
 func (m *Message) UnmarshalJSON(b []byte) error {
 	type alias Message
-	if err := json.Unmarshal(b, (*alias)(m)); err != nil {
+	aux := struct {
+		*alias
+
+		Text json.RawMessage `json:"text"`
+	}{alias: (*alias)(m)}
+	if err := json.Unmarshal(b, &aux); err != nil {
 		return fmt.Errorf("decode message: %w", err)
 	}
+	m.Text = stringOrEmpty(aux.Text)
 	m.Raw = append(json.RawMessage(nil), b...)
 	return nil
+}
+
+// stringOrEmpty returns raw as a string if it is a JSON string, else "".
+func stringOrEmpty(raw json.RawMessage) string {
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return ""
+	}
+	return s
 }
 
 // ListMessagesParams selects which messages to list: those of ContactID.
