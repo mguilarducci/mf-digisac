@@ -69,3 +69,86 @@ func TestContactsListAllStopsOnEmptyPage(t *testing.T) {
 		t.Errorf("requested pages %v, want %v (stop on empty page)", got, want)
 	}
 }
+
+func TestContactsListJSONIsRawAPIObjects(t *testing.T) {
+	// Each contact carries fields the CLI does not model, keys out of
+	// alphabetical order and non-ASCII text. -o json must print them as the
+	// API sent them.
+	srv := fakeDigisacWithContacts(t, fakeToken, map[string]string{
+		"1": `{"data":[` +
+			`{"name":"José Ñúñez","id":"c1","serviceId":"s1","tags":["vip","São Paulo"],"data":{"number":"5511999990001","extra":true}},` +
+			`{"zeta":1,"id":"c2","name":"Zoë 日本","serviceId":"s2","data":{"number":"5511999990002"},"alpha":null}` +
+			`],"total":2,"lastPage":1}`,
+	})
+
+	stdout, stderr, err := run(t, envCredentials(srv), "", "contacts", "list", "-o", "json")
+	if err != nil {
+		t.Fatalf("contacts list -o json: %v", err)
+	}
+	want := `[
+  {
+    "name": "José Ñúñez",
+    "id": "c1",
+    "serviceId": "s1",
+    "tags": [
+      "vip",
+      "São Paulo"
+    ],
+    "data": {
+      "number": "5511999990001",
+      "extra": true
+    }
+  },
+  {
+    "zeta": 1,
+    "id": "c2",
+    "name": "Zoë 日本",
+    "serviceId": "s2",
+    "data": {
+      "number": "5511999990002"
+    },
+    "alpha": null
+  }
+]
+`
+	if stdout != want {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
+	}
+	if stderr != "" {
+		t.Errorf("stderr = %q, want empty", stderr)
+	}
+}
+
+func TestContactsListEmptyTable(t *testing.T) {
+	srv := fakeDigisacWithContacts(t, fakeToken, map[string]string{
+		"1": `{"data":[],"total":0,"lastPage":1}`,
+	})
+
+	stdout, stderr, err := run(t, envCredentials(srv), "", "contacts", "list")
+	if err != nil {
+		t.Fatalf("contacts list: %v", err)
+	}
+	if want := "ID  NAME  NUMBER  SERVICE\n"; stdout != want {
+		t.Errorf("stdout = %q, want %q", stdout, want)
+	}
+	if want := "0 contacts\n"; stderr != want {
+		t.Errorf("stderr = %q, want %q", stderr, want)
+	}
+}
+
+func TestContactsListEmptyJSON(t *testing.T) {
+	srv := fakeDigisacWithContacts(t, fakeToken, map[string]string{
+		"1": `{"data":[],"total":0,"lastPage":1}`,
+	})
+
+	stdout, stderr, err := run(t, envCredentials(srv), "", "contacts", "list", "-o", "json")
+	if err != nil {
+		t.Fatalf("contacts list -o json: %v", err)
+	}
+	if want := "[]\n"; stdout != want {
+		t.Errorf("stdout = %q, want %q", stdout, want)
+	}
+	if stderr != "" {
+		t.Errorf("stderr = %q, want empty", stderr)
+	}
+}
