@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -51,32 +52,63 @@ var contactPages = map[string]string{
 		`],"total":3,"lastPage":2}`,
 }
 
-// fakeDigisac serves the parts of the Digisac API the CLI uses. Requests
-// without "Authorization: Bearer <token>" get 401.
-func fakeDigisac(t *testing.T, token string) *httptest.Server {
+// fakeServer is a fake Digisac API. It answers /api/v1/contacts from
+// contactPages, keyed by the page query parameter, and records the page
+// parameter of every contacts request it gets.
+type fakeServer struct {
+	*httptest.Server
+	contactPages map[string]string
+
+	mu        sync.Mutex
+	requested []string
+}
+
+// requestedContactPages returns the page parameters of the contacts requests
+// served so far, in order.
+func (f *fakeServer) requestedContactPages() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.requested...)
+}
+
+// fakeDigisac serves the parts of the Digisac API the CLI uses, with
+// contactPages as the contacts listing. Requests without
+// "Authorization: Bearer <token>" get 401.
+func fakeDigisac(t *testing.T, token string) *fakeServer {
 	t.Helper()
+	return fakeDigisacWithContacts(t, token, contactPages)
+}
+
+// fakeDigisacWithContacts is fakeDigisac with pages as the contacts listing.
+func fakeDigisacWithContacts(t *testing.T, token string, pages map[string]string) *fakeServer {
+	t.Helper()
+	f := &fakeServer{contactPages: pages}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/me", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":"u1","name":"Ada Lovelace","email":"ada@example.com"}`))
 	})
 	mux.HandleFunc("GET /api/v1/contacts", func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		f.mu.Lock()
+		f.requested = append(f.requested, page)
+		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(contactPages[r.URL.Query().Get("page")]))
+		_, _ = w.Write([]byte(f.contactPages[page]))
 	})
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+token {
 			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 		mux.ServeHTTP(w, r)
 	}))
-	t.Cleanup(srv.Close)
-	return srv
+	t.Cleanup(f.Close)
+	return f
 }
 
 // envCredentials points DIGISAC_URL and DIGISAC_TOKEN at srv.
-func envCredentials(srv *httptest.Server) map[string]string {
+func envCredentials(srv *fakeServer) map[string]string {
 	return map[string]string{"DIGISAC_URL": srv.URL + "/api/v1", "DIGISAC_TOKEN": fakeToken}
 }
 
