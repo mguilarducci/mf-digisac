@@ -366,3 +366,31 @@ func TestMessagesListDeletedWithoutTextShowsDeleted(t *testing.T) {
 		t.Errorf("stdout =\n%q\nwant\n%q", stdout, want)
 	}
 }
+
+func TestMessagesListDeletedAtOfAnyType(t *testing.T) {
+	// The API owns the shape of deletedAt. Any non-null, non-empty value
+	// marks the message deleted, and none of them may break the listing.
+	srv := fakeDigisac(t, routes{messagesPath: {
+		"1": `{"data":[` +
+			`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"type":"chat","text":"a","deletedAt":1763632860000},` +
+			`{"id":"m2","timestamp":"2026-11-20T10:01:00.000Z","isFromMe":false,"type":"chat","text":"b","deletedAt":{"at":"2026-11-20T10:02:00.000Z"}},` +
+			`{"id":"m3","timestamp":"2026-11-20T10:02:00.000Z","isFromMe":false,"type":"chat","text":"c","deletedAt":true},` +
+			`{"id":"m4","timestamp":"2026-11-20T10:03:00.000Z","isFromMe":false,"type":"chat","text":"d","deletedAt":null},` +
+			`{"id":"m5","timestamp":"2026-11-20T10:04:00.000Z","isFromMe":false,"type":"chat","text":"e","deletedAt":""}` +
+			`],"total":5,"lastPage":1}`,
+	}})
+
+	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
+	if err != nil {
+		t.Fatalf("messages list: %v", err)
+	}
+	want := "ID  TIME                      FROM     TYPE  TEXT\n" +
+		"m1  2026-11-20T10:00:00.000Z  contact  chat  [deleted]\n" +
+		"m2  2026-11-20T10:01:00.000Z  contact  chat  [deleted]\n" +
+		"m3  2026-11-20T10:02:00.000Z  contact  chat  [deleted]\n" +
+		"m4  2026-11-20T10:03:00.000Z  contact  chat  d\n" +
+		"m5  2026-11-20T10:04:00.000Z  contact  chat  e\n"
+	if stdout != want {
+		t.Errorf("stdout =\n%q\nwant\n%q", stdout, want)
+	}
+}
