@@ -41,10 +41,3 @@ func TestContactsListAll(t *testing.T) {
 		t.Errorf("stderr = %q, want it to report 3 contacts", stderr)
 	}
 }
-
-func TestContactsListNotAuthenticated(t *testing.T) {
-	_, _, err := run(t, nil, "", "contacts", "list")
-	if err == nil || !strings.HasPrefix(err.Error(), "not authenticated") {
-		t.Fatalf("err = %v, want not authenticated error", err)
-	}
-}

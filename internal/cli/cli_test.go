@@ -112,10 +112,18 @@ func TestAuthStatusJSON(t *testing.T) {
 	}
 }
 
-func TestAuthStatusNotAuthenticated(t *testing.T) {
-	_, _, err := run(t, nil, "", "auth", "status")
-	if err == nil || !strings.HasPrefix(err.Error(), "not authenticated") {
-		t.Fatalf("err = %v, want not authenticated error", err)
+func TestNotAuthenticated(t *testing.T) {
+	cases := [][]string{
+		{"auth", "status"},
+		{"contacts", "list"},
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			_, _, err := run(t, nil, "", args...)
+			if err == nil || !strings.HasPrefix(err.Error(), "not authenticated") {
+				t.Fatalf("err = %v, want not authenticated error", err)
+			}
+		})
 	}
 }
 
