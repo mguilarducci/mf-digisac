@@ -130,7 +130,7 @@ func TestAuthLoginSavesVerifiedToken(t *testing.T) {
 		t.Fatalf("decode config %q: %v", raw, err)
 	}
 	want := map[string]string{"url": srv.URL, "token": fakeToken}
-	if len(got) != len(want) || got["url"] != want["url"] || got["token"] != want["token"] {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("config = %v, want %v", got, want)
 	}
 }
