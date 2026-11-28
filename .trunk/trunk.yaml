@@ -1,0 +1,8 @@
+# Trunk Merge Queue configuration.
+# See https://docs.trunk.io/merge-queue/administration/advanced-settings#required-status-checks
+version: 0.1
+merge:
+  # Checks the queue waits on while testing a PR. `test` is the aggregate job
+  # in .github/workflows/test.yml that requires lint, unit and build to pass.
+  required_statuses:
+    - test
