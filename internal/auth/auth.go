@@ -1,7 +1,7 @@
 // Package auth owns the credential rules: DIGISAC_URL and DIGISAC_TOKEN
-// override the saved login field by field, the URL is normalized, and both
-// fields must be set to be authenticated. The config package only stores the
-// file.
+// override the saved login field by field, the URL is normalized, both
+// fields must be set to be authenticated, and what a login needs. It is the
+// only writer of the saved login; the config package only stores the file.
 package auth
 
 import (
@@ -41,6 +41,30 @@ func Current() (Credentials, error) {
 		return Credentials{}, errNotAuthenticated
 	}
 	return c, nil
+}
+
+// ParseLogin turns the raw URL and token given to auth login into
+// credentials: both are required, and the URL is normalized. Trimming
+// whitespace is left to the caller.
+func ParseLogin(url, token string) (Credentials, error) {
+	if url == "" || token == "" {
+		return Credentials{}, errors.New("url and token are required")
+	}
+	return Credentials{URL: normalizeURL(url), Token: token}, nil
+}
+
+// RecordLogin saves credentials the caller has already verified and returns
+// the path they were saved to.
+func RecordLogin(c Credentials) (string, error) {
+	if err := config.Save(&config.Config{URL: c.URL, Token: c.Token}); err != nil {
+		return "", err
+	}
+	return config.Path()
+}
+
+// RemoveLogin deletes the saved login. A missing file is not an error.
+func RemoveLogin() error {
+	return config.Delete()
 }
 
 // normalizeURL strips trailing slashes and a trailing /api/v1, so both

@@ -3,6 +3,7 @@ package auth
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -131,5 +132,79 @@ func TestCurrentNormalizesURL(t *testing.T) {
 				t.Errorf("Current().URL for %q = %q, want %q", c.in, got.URL, c.want)
 			}
 		})
+	}
+}
+
+func TestParseLogin(t *testing.T) {
+	cases := []struct {
+		name, url, token string
+		want             Credentials
+		wantErr          string
+	}{
+		{"normalizes url", "https://acme.digisac.io/api/v1/", "tok", Credentials{URL: "https://acme.digisac.io", Token: "tok"}, ""},
+		{"empty url", "", "tok", Credentials{}, "url and token are required"},
+		{"empty token", "https://acme.digisac.io", "", Credentials{}, "url and token are required"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := ParseLogin(c.url, c.token)
+			if c.wantErr != "" {
+				if err == nil || err.Error() != c.wantErr {
+					t.Errorf("ParseLogin(%q, %q) error = %v, want %q", c.url, c.token, err, c.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != c.want {
+				t.Errorf("ParseLogin(%q, %q) = %+v, want %+v", c.url, c.token, got, c.want)
+			}
+		})
+	}
+}
+
+func TestRecordLoginThenCurrent(t *testing.T) {
+	dir := isolate(t)
+	path, err := RecordLogin(Credentials{URL: "https://acme.digisac.io", Token: "tok"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(dir, "digisac", "config.json"); path != want {
+		t.Errorf("RecordLogin() path = %q, want %q", path, want)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Windows has no Unix permission bits; os.WriteFile's 0o600 maps to 0o666.
+	if perm := info.Mode().Perm(); runtime.GOOS != "windows" && perm != 0o600 {
+		t.Errorf("config file perm = %o, want 600", perm)
+	}
+
+	got, err := Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (Credentials{URL: "https://acme.digisac.io", Token: "tok"}); got != want {
+		t.Errorf("Current() = %+v, want %+v", got, want)
+	}
+}
+
+func TestRemoveLogin(t *testing.T) {
+	isolate(t)
+	if err := RemoveLogin(); err != nil {
+		t.Errorf("RemoveLogin() without file: %v", err)
+	}
+	path, err := RecordLogin(Credentials{URL: "u", Token: "t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveLogin(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("config file still exists after RemoveLogin(): %v", err)
 	}
 }
