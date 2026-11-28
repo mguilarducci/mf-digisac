@@ -98,7 +98,7 @@ func newAuthStatusCmd() *cobra.Command {
 	}
 }
 
-func runAuthStatus(ctx context.Context, out io.Writer, jsonOut bool) error {
+func runAuthStatus(ctx context.Context, stdout io.Writer, jsonOut bool) error {
 	c, err := clientFromConfig()
 	if err != nil {
 		return err
@@ -108,10 +108,10 @@ func runAuthStatus(ctx context.Context, out io.Writer, jsonOut bool) error {
 		return err
 	}
 	if jsonOut {
-		return printJSON(out, me)
+		return printJSON(stdout, me)
 	}
 	cfg, _ := config.Load()
-	fmt.Fprintf(out, "URL:   %s\nUser:  %v <%v>\nToken: %s\n", cfg.URL, me["name"], me["email"], mask(cfg.Token))
+	fmt.Fprintf(stdout, "URL:   %s\nUser:  %v <%v>\nToken: %s\n", cfg.URL, me["name"], me["email"], mask(cfg.Token))
 	return nil
 }
 
