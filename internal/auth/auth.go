@@ -6,6 +6,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -23,11 +24,11 @@ var errNotAuthenticated = errors.New("not authenticated: run `digisac auth login
 // Current returns the credentials in effect: the saved login with any
 // non-empty DIGISAC_URL or DIGISAC_TOKEN applied on top, URL normalized.
 // It fails with "not authenticated" when either field ends up empty, and
-// returns errors from reading or parsing the saved file as they are.
+// wraps errors from reading or parsing the saved file.
 func Current() (Credentials, error) {
 	cfg, err := config.Read()
 	if err != nil {
-		return Credentials{}, err
+		return Credentials{}, fmt.Errorf("load saved login: %w", err)
 	}
 	c := Credentials{URL: cfg.URL, Token: cfg.Token}
 	if v := os.Getenv("DIGISAC_URL"); v != "" {
@@ -57,14 +58,21 @@ func ParseLogin(url, token string) (Credentials, error) {
 // the path they were saved to.
 func RecordLogin(c Credentials) (string, error) {
 	if err := config.Save(&config.Config{URL: c.URL, Token: c.Token}); err != nil {
-		return "", err
+		return "", fmt.Errorf("save login: %w", err)
 	}
-	return config.Path()
+	path, err := config.Path()
+	if err != nil {
+		return "", fmt.Errorf("locate saved login: %w", err)
+	}
+	return path, nil
 }
 
 // RemoveLogin deletes the saved login. A missing file is not an error.
 func RemoveLogin() error {
-	return config.Delete()
+	if err := config.Delete(); err != nil {
+		return fmt.Errorf("remove saved login: %w", err)
+	}
+	return nil
 }
 
 // normalizeURL strips trailing slashes and a trailing /api/v1, so both
