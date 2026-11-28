@@ -5,18 +5,6 @@ import (
 	"testing"
 )
 
-// contactPages are the fake API's /api/v1/contacts responses, keyed by the
-// page query parameter. The listing spans two pages.
-var contactPages = map[string]string{
-	"1": `{"data":[` +
-		`{"id":"c1","name":"Ada Lovelace","serviceId":"s1","data":{"number":"5511999990001"}},` +
-		`{"id":"c2","name":"Alan Turing","serviceId":"s1","data":{"number":"5511999990002"}}` +
-		`],"total":3,"lastPage":2}`,
-	"2": `{"data":[` +
-		`{"id":"c3","name":"Grace Hopper","serviceId":"s2","data":{"number":"5511999990003"}}` +
-		`],"total":3,"lastPage":2}`,
-}
-
 func TestContactsListFirstPage(t *testing.T) {
 	srv := fakeDigisac(t, fakeToken)
 

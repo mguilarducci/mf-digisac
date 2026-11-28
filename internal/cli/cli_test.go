@@ -39,6 +39,18 @@ func run(t *testing.T, env map[string]string, stdin string, args ...string) (std
 
 const fakeToken = "tok_abcdefghijklmnop"
 
+// contactPages are the fake API's /api/v1/contacts responses, keyed by the
+// page query parameter. The listing spans two pages.
+var contactPages = map[string]string{
+	"1": `{"data":[` +
+		`{"id":"c1","name":"Ada Lovelace","serviceId":"s1","data":{"number":"5511999990001"}},` +
+		`{"id":"c2","name":"Alan Turing","serviceId":"s1","data":{"number":"5511999990002"}}` +
+		`],"total":3,"lastPage":2}`,
+	"2": `{"data":[` +
+		`{"id":"c3","name":"Grace Hopper","serviceId":"s2","data":{"number":"5511999990003"}}` +
+		`],"total":3,"lastPage":2}`,
+}
+
 // fakeDigisac serves the parts of the Digisac API the CLI uses. Requests
 // without "Authorization: Bearer <token>" get 401.
 func fakeDigisac(t *testing.T, token string) *httptest.Server {
