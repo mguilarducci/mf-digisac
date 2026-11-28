@@ -66,3 +66,7 @@ checksum:
 
 release:
   prerelease: auto
+
+# GitHub generates the notes from the merged PRs since the previous tag.
+changelog:
+  use: github-native

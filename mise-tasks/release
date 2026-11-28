@@ -27,13 +27,6 @@ if [ -n "$status" ]; then
   exit 1
 fi
 
-# The release workflow publishes the CHANGELOG.md section as release notes,
-# and fails without one. Catch that before the tag is pushed.
-if ! grep -qE "^## \[${VERSION#v}\]" CHANGELOG.md; then
-  echo "Error: no '## [${VERSION#v}]' entry in CHANGELOG.md"
-  exit 1
-fi
-
 git tag "$VERSION"
 echo "Created tag ${VERSION}"
 
