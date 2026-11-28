@@ -67,3 +67,69 @@ func TestCurrentReadsSavedLoginUnderXDGConfigHome(t *testing.T) {
 		t.Errorf("Current() = %+v, want %+v", got, want)
 	}
 }
+
+func TestCurrentEnvOverridesSavedLogin(t *testing.T) {
+	cases := []struct {
+		name               string
+		envURL, envToken   string
+		wantURL, wantToken string
+	}{
+		{"no env uses file", "", "", "https://file.digisac.io", "file-tok"},
+		{"env token only", "", "env-tok", "https://file.digisac.io", "env-tok"},
+		{"env url only, normalized", "https://env.digisac.io/api/v1/", "", "https://env.digisac.io", "file-tok"},
+		{"both env", "https://env.digisac.io", "env-tok", "https://env.digisac.io", "env-tok"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := isolate(t)
+			writeSavedLogin(t, dir, `{"url":"https://file.digisac.io","token":"file-tok"}`)
+			t.Setenv("DIGISAC_URL", c.envURL)
+			t.Setenv("DIGISAC_TOKEN", c.envToken)
+
+			got, err := Current()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.URL != c.wantURL || got.Token != c.wantToken {
+				t.Errorf("Current() = {%q %q}, want {%q %q}", got.URL, got.Token, c.wantURL, c.wantToken)
+			}
+		})
+	}
+}
+
+func TestCurrentInvalidJSON(t *testing.T) {
+	dir := isolate(t)
+	writeSavedLogin(t, dir, "{not json")
+	t.Setenv("DIGISAC_URL", "https://env.digisac.io")
+	t.Setenv("DIGISAC_TOKEN", "env-tok")
+
+	_, err := Current()
+	if err == nil || err.Error() == notAuthenticated {
+		t.Errorf("Current() with invalid JSON: error = %v, want a parse error", err)
+	}
+}
+
+func TestCurrentNormalizesURL(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"https://acme.digisac.io", "https://acme.digisac.io"},
+		{"https://acme.digisac.io/", "https://acme.digisac.io"},
+		{"https://acme.digisac.io/api/v1", "https://acme.digisac.io"},
+		{"https://acme.digisac.io/api/v1/", "https://acme.digisac.io"},
+		{"https://acme.digisac.io/api/v1//", "https://acme.digisac.io"},
+	}
+	for _, c := range cases {
+		t.Run(c.in, func(t *testing.T) {
+			isolate(t)
+			t.Setenv("DIGISAC_URL", c.in)
+			t.Setenv("DIGISAC_TOKEN", "tok")
+
+			got, err := Current()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.URL != c.want {
+				t.Errorf("Current().URL for %q = %q, want %q", c.in, got.URL, c.want)
+			}
+		})
+	}
+}
