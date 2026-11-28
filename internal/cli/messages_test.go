@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/url"
 	"reflect"
 	"strings"
@@ -71,7 +73,7 @@ func TestMessagesListAll(t *testing.T) {
 	want := "ID  TIME                      FROM     TYPE   TEXT\n" +
 		"m2  2026-11-20T10:05:00.000Z  me       chat   Hi Ada, how can I help?\n" +
 		"m1  2026-11-20T10:00:00.000Z  contact  chat   Hello\n" +
-		"m0  2026-11-19T18:30:00.000Z  contact  image  \n"
+		"m0  2026-11-19T18:30:00.000Z  contact  image  [image]\n"
 	if stdout != want {
 		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
 	}
@@ -238,10 +240,72 @@ func TestMessagesListNonStringTextCountsAsEmpty(t *testing.T) {
 		t.Fatalf("messages list: %v", err)
 	}
 	want := "ID  TIME                      FROM     TYPE  TEXT\n" +
-		"m1  2026-11-20T10:00:00.000Z  contact  chat  \n" +
-		"m2  2026-11-20T10:01:00.000Z  contact  chat  \n" +
-		"m3  2026-11-20T10:02:00.000Z  contact  chat  \n"
+		"m1  2026-11-20T10:00:00.000Z  contact  chat  [chat]\n" +
+		"m2  2026-11-20T10:01:00.000Z  contact  chat  [chat]\n" +
+		"m3  2026-11-20T10:02:00.000Z  contact  chat  [chat]\n"
 	if stdout != want {
 		t.Errorf("stdout =\n%q\nwant\n%q", stdout, want)
+	}
+}
+
+// everyKindOfMessage is one page holding each kind of message the table must
+// keep readable.
+const everyKindOfMessage = `{"data":[` +
+	`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"isFromBot":false,"type":"chat","text":"Hello"},` +
+	`{"id":"m2","timestamp":"2026-11-20T10:01:00.000Z","isFromMe":true,"isFromBot":false,"type":"chat","text":"Hi Ada"},` +
+	`{"id":"m3","timestamp":"2026-11-20T10:02:00.000Z","isFromMe":true,"isFromBot":true,"type":"chat","text":"Pick an option"},` +
+	`{"id":"m4","timestamp":"2026-11-20T10:03:00.000Z","isFromMe":true,"isFromBot":false,"type":"ticket","text":"Ticket opened"},` +
+	`{"id":"m5","timestamp":"2026-11-20T10:04:00.000Z","isFromMe":true,"isFromBot":true,"type":"comment","text":"Call back later"},` +
+	`{"id":"m6","timestamp":"2026-11-20T10:05:00.000Z","isFromMe":false,"isFromBot":false,"type":"image","text":null},` +
+	`{"id":"m7","timestamp":"2026-11-20T10:06:00.000Z","isFromMe":false,"isFromBot":false,"type":"chat","text":"Oops","deletedAt":"2026-11-20T10:07:00.000Z"},` +
+	`{"id":"m8","timestamp":"2026-11-20T10:08:00.000Z","isFromMe":false,"isFromBot":false,"type":"chat","text":"First line\nsecond line\r\nthird line, which is long enough that any truncation of the text column would cut it off"}` +
+	`],"total":8,"lastPage":1}`
+
+func TestMessagesListEveryKindOfMessage(t *testing.T) {
+	srv := fakeDigisacWithMessages(t, map[string]string{"1": everyKindOfMessage})
+
+	stdout, stderr, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
+	if err != nil {
+		t.Fatalf("messages list: %v", err)
+	}
+	want := "ID  TIME                      FROM     TYPE     TEXT\n" +
+		"m1  2026-11-20T10:00:00.000Z  contact  chat     Hello\n" +
+		"m2  2026-11-20T10:01:00.000Z  me       chat     Hi Ada\n" +
+		"m3  2026-11-20T10:02:00.000Z  bot      chat     Pick an option\n" +
+		"m4  2026-11-20T10:03:00.000Z  system   ticket   Ticket opened\n" +
+		"m5  2026-11-20T10:04:00.000Z  system   comment  Call back later\n" +
+		"m6  2026-11-20T10:05:00.000Z  contact  image    [image]\n" +
+		"m7  2026-11-20T10:06:00.000Z  contact  chat     [deleted]\n" +
+		"m8  2026-11-20T10:08:00.000Z  contact  chat     First line second line third line, which is long enough that any truncation of the text column would cut it off\n"
+	if stdout != want {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
+	}
+	if !strings.Contains(stderr, "8 messages\n") {
+		t.Errorf("stderr = %q, want it to report 8 messages", stderr)
+	}
+}
+
+func TestMessagesListEveryKindOfMessageJSONIsRaw(t *testing.T) {
+	srv := fakeDigisacWithMessages(t, map[string]string{"1": everyKindOfMessage})
+
+	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1", "-o", "json")
+	if err != nil {
+		t.Fatalf("messages list -o json: %v", err)
+	}
+	// The table rewrites FROM and TEXT; JSON must be the API's objects
+	// byte for byte, only indented.
+	var page struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(everyKindOfMessage), &page); err != nil {
+		t.Fatal(err)
+	}
+	var want bytes.Buffer
+	if err := json.Indent(&want, page.Data, "", "  "); err != nil {
+		t.Fatal(err)
+	}
+	want.WriteByte('\n')
+	if stdout != want.String() {
+		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want.String())
 	}
 }

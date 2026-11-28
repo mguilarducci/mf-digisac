@@ -96,8 +96,10 @@ type Message struct {
 	ID        string          `json:"id"`
 	Timestamp string          `json:"timestamp"`
 	IsFromMe  bool            `json:"isFromMe"`
+	IsFromBot bool            `json:"isFromBot"`
 	Type      MessageType     `json:"type"`
 	Text      string          `json:"text"`
+	DeletedAt string          `json:"deletedAt"`
 	Raw       json.RawMessage `json:"-"`
 }
 

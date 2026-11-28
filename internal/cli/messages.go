@@ -59,17 +59,40 @@ var messagesView = listView[digisac.Message]{
 	noun:    "messages",
 	headers: []string{"ID", "TIME", "FROM", "TYPE", "TEXT"},
 	row: func(m digisac.Message) []string {
-		return []string{m.ID, m.Timestamp, messageSender(m), string(m.Type), m.Text}
+		return []string{m.ID, m.Timestamp, messageSender(m), string(m.Type), messageText(m)}
 	},
 	raw: func(m digisac.Message) json.RawMessage { return m.Raw },
 }
 
-// messageSender names who sent m: "me" or "contact".
+// messageSender names who sent m: "system" for internal entries, else "bot",
+// "me" or "contact", in that order of precedence.
 func messageSender(m digisac.Message) string {
-	if m.IsFromMe {
+	switch {
+	case m.Type == digisac.MessageTypeTicket || m.Type == digisac.MessageTypeComment:
+		return "system"
+	case m.IsFromBot:
+		return "bot"
+	case m.IsFromMe:
 		return "me"
+	default:
+		return "contact"
 	}
-	return "contact"
+}
+
+// lineBreaks matches each line break, so a multi-line text fits one table row.
+var lineBreaks = strings.NewReplacer("\r\n", " ", "\n", " ")
+
+// messageText is what the TEXT column shows for m: [deleted] for a deleted
+// message, [<type>] for one without text, otherwise its full text on one line.
+func messageText(m digisac.Message) string {
+	switch {
+	case m.DeletedAt != "":
+		return "[deleted]"
+	case m.Text == "":
+		return "[" + string(m.Type) + "]"
+	default:
+		return lineBreaks.Replace(m.Text)
+	}
 }
 
 func runMessagesList(ctx context.Context, stdout, stderr io.Writer, format outputFormat, p digisac.ListMessagesParams) error {
