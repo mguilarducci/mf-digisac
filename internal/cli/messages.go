@@ -3,8 +3,10 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -34,6 +36,9 @@ func newMessagesListCmd() *cobra.Command {
   # Every page, as JSON
   digisac messages list --contact <id> --all -o json`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if strings.TrimSpace(p.ContactID) == "" {
+				return errors.New("--contact must not be empty")
+			}
 			format, err := listFormat(cmd)
 			if err != nil {
 				return err

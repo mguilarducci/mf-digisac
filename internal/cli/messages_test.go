@@ -192,3 +192,23 @@ func TestMessagesListRejectsUnknownOutputFormat(t *testing.T) {
 		t.Errorf("stdout = %q, want empty", stdout)
 	}
 }
+
+func TestMessagesListRejectsBlankContact(t *testing.T) {
+	for _, contact := range []string{"", "   "} {
+		srv := fakeDigisac(t)
+
+		stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", contact)
+		if err == nil {
+			t.Fatalf("messages list --contact %q succeeded, want an error", contact)
+		}
+		if want := "--contact must not be empty"; !strings.Contains(err.Error(), want) {
+			t.Errorf("--contact %q: error = %q, want it to contain %q", contact, err, want)
+		}
+		if stdout != "" {
+			t.Errorf("--contact %q: stdout = %q, want empty", contact, stdout)
+		}
+		if got := srv.requestedMessageQueries(); len(got) != 0 {
+			t.Errorf("--contact %q: requested queries %v, want none", contact, got)
+		}
+	}
+}
