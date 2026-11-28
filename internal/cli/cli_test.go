@@ -48,6 +48,10 @@ func fakeDigisac(t *testing.T, token string) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":"u1","name":"Ada Lovelace","email":"ada@example.com"}`))
 	})
+	mux.HandleFunc("GET /api/v1/contacts", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(contactPages[r.URL.Query().Get("page")]))
+	})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+token {
 			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
