@@ -30,8 +30,9 @@ func Path() (string, error) {
 	return filepath.Join(dir, "digisac", "config.json"), nil
 }
 
-// Load reads the config file (if any) and applies env var overrides.
-func Load() (*Config, error) {
+// Read returns the saved config file's contents. A missing file gives an
+// empty Config and no error.
+func Read() (*Config, error) {
 	cfg := &Config{}
 	path, err := Path()
 	if err != nil {
@@ -44,6 +45,15 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
 	case !errors.Is(err, os.ErrNotExist):
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// Load reads the config file (if any) and applies env var overrides.
+func Load() (*Config, error) {
+	cfg, err := Read()
+	if err != nil {
 		return nil, err
 	}
 	if v := os.Getenv("DIGISAC_URL"); v != "" {
