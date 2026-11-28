@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -87,13 +88,8 @@ func TestAuthStatusJSON(t *testing.T) {
 		t.Fatalf("decode stdout %q: %v", stdout, err)
 	}
 	want := map[string]any{"id": "u1", "name": "Ada Lovelace", "email": "ada@example.com"}
-	if len(got) != len(want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("%s = %v, want %v", k, got[k], v)
-		}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 
