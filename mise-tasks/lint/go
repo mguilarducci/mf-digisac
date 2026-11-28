@@ -1,4 +1,16 @@
 #!/bin/sh
 #MISE description="Lint go"
 
-go vet ./...
+# I want to see the version and verify the config of golangci-lint even though CI uses the
+# golangci/golangci-lint-action plugin.
+golangci-lint version
+golangci-lint config verify
+
+# If we're in CI, we rely on golangci/golangci-lint-action defined in .github/workflows/lint.yml
+# so only run this locally:
+if [ "$CI" = "true" ]; then
+  echo "skipped because CI=true"
+else
+  # No --fix: lint is read-only, like CI. `mise run fmt` owns rewriting.
+  golangci-lint run --timeout=30m ./...
+fi

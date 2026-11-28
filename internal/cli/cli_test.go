@@ -57,6 +57,7 @@ var contactPages = map[string]string{
 // parameter of every contacts request it gets.
 type fakeServer struct {
 	*httptest.Server
+
 	contactPages map[string]string
 
 	mu        sync.Mutex
@@ -73,20 +74,22 @@ func (f *fakeServer) requestedContactPages() []string {
 
 // fakeDigisac serves the parts of the Digisac API the CLI uses, with
 // contactPages as the contacts listing. Requests without
-// "Authorization: Bearer <token>" get 401.
-func fakeDigisac(t *testing.T, token string) *fakeServer {
+// "Authorization: Bearer <fakeToken>" get 401.
+func fakeDigisac(t *testing.T) *fakeServer {
 	t.Helper()
-	return fakeDigisacWithContacts(t, token, contactPages)
+	return fakeDigisacWithContacts(t, contactPages)
 }
 
 // fakeDigisacWithContacts is fakeDigisac with pages as the contacts listing.
-func fakeDigisacWithContacts(t *testing.T, token string, pages map[string]string) *fakeServer {
+func fakeDigisacWithContacts(t *testing.T, pages map[string]string) *fakeServer {
 	t.Helper()
 	f := &fakeServer{contactPages: pages}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/me", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"u1","name":"Ada Lovelace","email":"ada@example.com"}`))
+		if _, err := w.Write([]byte(`{"id":"u1","name":"Ada Lovelace","email":"ada@example.com"}`)); err != nil {
+			t.Error(err)
+		}
 	})
 	mux.HandleFunc("GET /api/v1/contacts", func(w http.ResponseWriter, r *http.Request) {
 		page := r.URL.Query().Get("page")
@@ -94,10 +97,12 @@ func fakeDigisacWithContacts(t *testing.T, token string, pages map[string]string
 		f.requested = append(f.requested, page)
 		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(f.contactPages[page]))
+		if _, err := w.Write([]byte(f.contactPages[page])); err != nil {
+			t.Error(err)
+		}
 	})
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+token {
+		if r.Header.Get("Authorization") != "Bearer "+fakeToken {
 			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
@@ -113,7 +118,7 @@ func envCredentials(srv *fakeServer) map[string]string {
 }
 
 func TestAuthStatusTable(t *testing.T) {
-	srv := fakeDigisac(t, fakeToken)
+	srv := fakeDigisac(t)
 
 	stdout, _, err := run(t, envCredentials(srv), "", "auth", "status")
 	if err != nil {
@@ -128,7 +133,7 @@ func TestAuthStatusTable(t *testing.T) {
 }
 
 func TestAuthStatusJSON(t *testing.T) {
-	srv := fakeDigisac(t, fakeToken)
+	srv := fakeDigisac(t)
 
 	stdout, _, err := run(t, envCredentials(srv), "", "auth", "status", "-o", "json")
 	if err != nil {
@@ -166,7 +171,7 @@ func configPath(configHome string) string {
 }
 
 func TestAuthLoginSavesVerifiedToken(t *testing.T) {
-	srv := fakeDigisac(t, fakeToken)
+	srv := fakeDigisac(t)
 
 	_, stderr, err := run(t, nil, fakeToken+"\n", "auth", "login", "--url", srv.URL+"/api/v1")
 	if err != nil {
@@ -192,7 +197,7 @@ func TestAuthLoginSavesVerifiedToken(t *testing.T) {
 }
 
 func TestAuthLoginRejectedTokenSavesNothing(t *testing.T) {
-	srv := fakeDigisac(t, fakeToken)
+	srv := fakeDigisac(t)
 
 	_, _, err := run(t, nil, "tok_wrong\n", "auth", "login", "--url", srv.URL+"/api/v1")
 	if err == nil {

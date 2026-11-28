@@ -13,5 +13,7 @@ Their full license texts are in third_party/licenses/.
 - entireio/cli (https://github.com/entireio/cli)
   Copyright (c) 2026 Entire Inc.
   MIT License: third_party/licenses/entireio-cli.LICENSE
-  Used in: .goreleaser.yaml, .github/workflows/release.yml,
-  mise-tasks/release, .claude/skills/changelog/
+  Used in: .goreleaser.yaml, .golangci.yaml, .github/workflows/release.yml,
+  .github/workflows/govulncheck.yml, the golangci-lint steps of
+  .github/workflows/test.yml, mise-tasks/release, mise-tasks/lint/go,
+  mise-tasks/lint/vuln, .claude/skills/changelog/

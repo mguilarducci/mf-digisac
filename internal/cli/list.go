@@ -21,7 +21,10 @@ const (
 // listFormat parses the -o/--output flag of cmd. It accepts table and json
 // and rejects anything else.
 func listFormat(cmd *cobra.Command) (outputFormat, error) {
-	out, _ := cmd.Flags().GetString("output")
+	out, err := cmd.Flags().GetString("output")
+	if err != nil {
+		return 0, fmt.Errorf("read --output flag: %w", err)
+	}
 	switch out {
 	case "table":
 		return formatTable, nil
@@ -60,7 +63,7 @@ func renderList[T any](stdout, stderr io.Writer, format outputFormat, items []T,
 		fmt.Fprintln(w, strings.Join(view.row(it), "\t"))
 	}
 	if err := w.Flush(); err != nil {
-		return err
+		return fmt.Errorf("write table: %w", err)
 	}
 	fmt.Fprintf(stderr, "%d %s\n", len(items), view.noun)
 	return nil

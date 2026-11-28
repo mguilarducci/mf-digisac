@@ -20,7 +20,7 @@ func NewRootCmd() *cobra.Command {
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Run:           func(cmd *cobra.Command, args []string) { _ = cmd.Help() },
+		RunE:          func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	// When run as an mf plugin (`mf digisac ...`), show that in help/usage.
 	if os.Getenv("MF_PLUGIN_NAME") != "" {
@@ -36,19 +36,22 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print the plugin version",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, _ []string) {
 			fmt.Fprintln(cmd.OutOrStdout(), "mf-digisac "+Version)
 		},
 	}
 }
 
 func isJSONOutput(cmd *cobra.Command) bool {
-	out, _ := cmd.Flags().GetString("output")
-	return out == "json"
+	out, err := cmd.Flags().GetString("output")
+	return err == nil && out == "json"
 }
 
 func printJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(v)
+	if err := enc.Encode(v); err != nil {
+		return fmt.Errorf("write JSON: %w", err)
+	}
+	return nil
 }

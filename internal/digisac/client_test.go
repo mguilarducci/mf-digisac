@@ -33,7 +33,9 @@ func TestListContacts(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer tok" {
 			t.Errorf("Authorization = %q", got)
 		}
-		_, _ = w.Write([]byte(`{"data":[{"id":"c1","name":"Ana","serviceId":"s1","data":{"number":"5511"},"extra":true}],"total":11,"lastPage":2}`))
+		if _, err := w.Write([]byte(`{"data":[{"id":"c1","name":"Ana","serviceId":"s1","data":{"number":"5511"},"extra":true}],"total":11,"lastPage":2}`)); err != nil {
+			t.Error(err)
+		}
 	})
 
 	contacts, err := c.ListContacts(context.Background(), ListContactsParams{Page: 2, PerPage: 10})
@@ -60,7 +62,9 @@ func TestMe(t *testing.T) {
 		if r.URL.Path != "/api/v1/me" {
 			t.Errorf("path = %q", r.URL.Path)
 		}
-		_, _ = w.Write([]byte(`{"name":"Ana","email":"ana@x.com"}`))
+		if _, err := w.Write([]byte(`{"name":"Ana","email":"ana@x.com"}`)); err != nil {
+			t.Error(err)
+		}
 	})
 
 	me, err := c.Me(context.Background())
@@ -73,9 +77,11 @@ func TestMe(t *testing.T) {
 }
 
 func TestErrorStatusIncludesBody(t *testing.T) {
-	c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+	c := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"message":"invalid token"}`))
+		if _, err := w.Write([]byte(`{"message":"invalid token"}`)); err != nil {
+			t.Error(err)
+		}
 	})
 
 	_, err := c.Me(context.Background())
@@ -90,8 +96,10 @@ func TestErrorStatusIncludesBody(t *testing.T) {
 }
 
 func TestInvalidJSONResponse(t *testing.T) {
-	c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`<html>oops</html>`))
+	c := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write([]byte(`<html>oops</html>`)); err != nil {
+			t.Error(err)
+		}
 	})
 
 	if _, err := c.ListContacts(context.Background(), ListContactsParams{Page: 1, PerPage: 1}); err == nil {
@@ -107,7 +115,10 @@ func pagedServer(t *testing.T, lastPage int, pages map[int]string) (*Client, *[]
 	c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Query().Get("page")
 		requested = append(requested, p)
-		n, _ := strconv.Atoi(p)
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			t.Errorf("page = %q, want an integer", p)
+		}
 		body := pages[n]
 		fmt.Fprintf(w, `{"data":[%s],"total":0,"lastPage":%d}`, body, lastPage)
 	})
@@ -188,7 +199,9 @@ func TestListContactsAllErrorOnLaterPage(t *testing.T) {
 			http.Error(w, "boom", http.StatusInternalServerError)
 			return
 		}
-		_, _ = w.Write([]byte(`{"data":[{"id":"a"}],"lastPage":3}`))
+		if _, err := w.Write([]byte(`{"data":[{"id":"a"}],"lastPage":3}`)); err != nil {
+			t.Error(err)
+		}
 	})
 
 	contacts, err := c.ListContacts(context.Background(), ListContactsParams{Page: 1, PerPage: 1, All: true})
