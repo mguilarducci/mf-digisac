@@ -45,7 +45,7 @@ func newContactsListCmd() *cobra.Command {
 }
 
 func runContactsList(ctx context.Context, stdout, stderr io.Writer, jsonOut bool, p digisac.ListContactsParams) error {
-	c, err := clientFromConfig()
+	c, err := digisac.New()
 	if err != nil {
 		return err
 	}

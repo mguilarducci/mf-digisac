@@ -14,7 +14,7 @@ func newTestServer(t *testing.T, h http.HandlerFunc) *Client {
 	t.Helper()
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return New(srv.URL, "tok")
+	return NewWithCredentials(srv.URL, "tok")
 }
 
 func TestListContacts(t *testing.T) {

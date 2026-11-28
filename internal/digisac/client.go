@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/mguilarducci/mf-digisac/internal/auth"
 )
 
 type Client struct {
@@ -16,7 +18,19 @@ type Client struct {
 	http    *http.Client
 }
 
-func New(baseURL, token string) *Client {
+// New returns a client for the current credentials (see auth.Current), or
+// the error auth.Current returns, such as "not authenticated".
+func New() (*Client, error) {
+	creds, err := auth.Current()
+	if err != nil {
+		return nil, err
+	}
+	return NewWithCredentials(creds.URL, creds.Token), nil
+}
+
+// NewWithCredentials returns a client for an explicit URL and token, such as
+// credentials being verified before they are saved.
+func NewWithCredentials(baseURL, token string) *Client {
 	return &Client{baseURL: baseURL, token: token, http: http.DefaultClient}
 }
 

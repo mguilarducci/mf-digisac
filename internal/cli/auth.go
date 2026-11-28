@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/mguilarducci/mf-digisac/internal/auth"
 	"github.com/mguilarducci/mf-digisac/internal/config"
 	"github.com/mguilarducci/mf-digisac/internal/digisac"
 )
@@ -77,7 +78,7 @@ func runAuthLogin(ctx context.Context, stdin io.Reader, stderr io.Writer, url st
 	}
 
 	cfg := &config.Config{URL: config.NormalizeURL(url), Token: token}
-	if _, err := digisac.New(cfg.URL, cfg.Token).Me(ctx); err != nil {
+	if _, err := digisac.NewWithCredentials(cfg.URL, cfg.Token).Me(ctx); err != nil {
 		return fmt.Errorf("token check failed: %w", err)
 	}
 	if err := config.Save(cfg); err != nil {
@@ -99,19 +100,18 @@ func newAuthStatusCmd() *cobra.Command {
 }
 
 func runAuthStatus(ctx context.Context, stdout io.Writer, jsonOut bool) error {
-	c, err := clientFromConfig()
+	creds, err := auth.Current()
 	if err != nil {
 		return err
 	}
-	me, err := c.Me(ctx)
+	me, err := digisac.NewWithCredentials(creds.URL, creds.Token).Me(ctx)
 	if err != nil {
 		return err
 	}
 	if jsonOut {
 		return printJSON(stdout, me)
 	}
-	cfg, _ := config.Load()
-	fmt.Fprintf(stdout, "URL:   %s\nUser:  %v <%v>\nToken: %s\n", cfg.URL, me["name"], me["email"], mask(cfg.Token))
+	fmt.Fprintf(stdout, "URL:   %s\nUser:  %v <%v>\nToken: %s\n", creds.URL, me["name"], me["email"], mask(creds.Token))
 	return nil
 }
 
