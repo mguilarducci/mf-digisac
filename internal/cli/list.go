@@ -18,13 +18,17 @@ const (
 	formatJSON
 )
 
-// listFormat reads the -o/--output flag of cmd. Any value other than json
-// renders a table.
-func listFormat(cmd *cobra.Command) outputFormat {
-	if isJSONOutput(cmd) {
-		return formatJSON
+// listFormat parses the -o/--output flag of cmd. It accepts table and json
+// and rejects anything else.
+func listFormat(cmd *cobra.Command) (outputFormat, error) {
+	out, _ := cmd.Flags().GetString("output")
+	switch out {
+	case "table":
+		return formatTable, nil
+	case "json":
+		return formatJSON, nil
 	}
-	return formatTable
+	return 0, fmt.Errorf("unknown output format %q (want table or json)", out)
 }
 
 // listView declares how a list command shows its items.

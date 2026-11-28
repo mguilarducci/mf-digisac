@@ -154,3 +154,18 @@ func TestContactsListEmptyJSON(t *testing.T) {
 		t.Errorf("stderr = %q, want empty", stderr)
 	}
 }
+
+func TestContactsListRejectsUnknownOutputFormat(t *testing.T) {
+	srv := fakeDigisac(t, fakeToken)
+
+	stdout, _, err := run(t, envCredentials(srv), "", "contacts", "list", "-o", "yaml")
+	if err == nil {
+		t.Fatal("contacts list -o yaml succeeded, want an error")
+	}
+	if want := `unknown output format "yaml" (want table or json)`; !strings.Contains(err.Error(), want) {
+		t.Errorf("error = %q, want it to contain %q", err, want)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want empty", stdout)
+	}
+}

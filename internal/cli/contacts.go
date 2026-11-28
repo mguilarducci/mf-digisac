@@ -34,7 +34,11 @@ func newContactsListCmd() *cobra.Command {
   # Every page, as JSON
   digisac contacts list --all -o json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runContactsList(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), listFormat(cmd), p)
+			format, err := listFormat(cmd)
+			if err != nil {
+				return err
+			}
+			return runContactsList(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), format, p)
 		},
 	}
 	cmd.Flags().IntVar(&p.Page, "page", 1, "Page number")
