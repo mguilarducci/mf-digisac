@@ -75,6 +75,45 @@ func (c *Client) ListContacts(ctx context.Context, p ListContactsParams) ([]Cont
 	return collectPages[Contact](ctx, c, "/api/v1/contacts", url.Values{}, p.Page, p.PerPage, p.All)
 }
 
+// Message keeps the fields the CLI prints; Raw holds the full object.
+type Message struct {
+	ID        string          `json:"id"`
+	Timestamp string          `json:"timestamp"`
+	IsFromMe  bool            `json:"isFromMe"`
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	Raw       json.RawMessage `json:"-"`
+}
+
+func (m *Message) UnmarshalJSON(b []byte) error {
+	type alias Message
+	if err := json.Unmarshal(b, (*alias)(m)); err != nil {
+		return fmt.Errorf("decode message: %w", err)
+	}
+	m.Raw = append(json.RawMessage(nil), b...)
+	return nil
+}
+
+// ListMessagesParams selects which messages to list: those of ContactID. With
+// All set, listing starts at Page and continues through the last page.
+type ListMessagesParams struct {
+	ContactID string
+	Page      int
+	PerPage   int
+	All       bool
+}
+
+// ListMessages lists one contact's messages, newest first
+// (GET /api/v1/messages). The order is always sent explicitly because the
+// API's default order is unknown.
+func (c *Client) ListMessages(ctx context.Context, p ListMessagesParams) ([]Message, error) {
+	q := url.Values{}
+	q.Set("where[contactId]", p.ContactID)
+	q.Set("order[0][0]", "timestamp")
+	q.Set("order[0][1]", "DESC")
+	return collectPages[Message](ctx, c, "/api/v1/messages", q, p.Page, p.PerPage, p.All)
+}
+
 // collectPages fetches page start of path and, when all is set, every page
 // after it until the API reports the last page.
 func collectPages[T any](ctx context.Context, c *Client, path string, query url.Values, start, perPage int, all bool) ([]T, error) {

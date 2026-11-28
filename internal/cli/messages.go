@@ -1,0 +1,80 @@
+package cli
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+
+	"github.com/spf13/cobra"
+
+	"github.com/mguilarducci/mf-digisac/internal/digisac"
+)
+
+func newMessagesCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "messages",
+		Aliases: []string{"message"},
+		Short:   "Manage messages",
+		Long:    `Commands for listing Digisac messages.`,
+		RunE:    func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
+	}
+	cmd.AddCommand(newMessagesListCmd())
+	return cmd
+}
+
+func newMessagesListCmd() *cobra.Command {
+	var p digisac.ListMessagesParams
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List one contact's messages, newest first",
+		Example: `  # Newest page of a contact's messages as a table
+  digisac messages list --contact <id>
+
+  # Every page, as JSON
+  digisac messages list --contact <id> --all -o json`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			format, err := listFormat(cmd)
+			if err != nil {
+				return err
+			}
+			return runMessagesList(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), format, p)
+		},
+	}
+	cmd.Flags().StringVar(&p.ContactID, "contact", "", "ID of the contact whose messages to list (required)")
+	cmd.Flags().IntVar(&p.Page, "page", 1, "Page number")
+	cmd.Flags().IntVar(&p.PerPage, "per-page", 40, "Items per page")
+	cmd.Flags().BoolVar(&p.All, "all", false, "Fetch every page")
+	return cmd
+}
+
+// messagesView shows one message per row and its raw API object as JSON.
+var messagesView = listView[digisac.Message]{
+	noun:    "messages",
+	headers: []string{"ID", "TIME", "FROM", "TYPE", "TEXT"},
+	row: func(m digisac.Message) []string {
+		return []string{m.ID, m.Timestamp, messageSender(m), m.Type, m.Text}
+	},
+	raw: func(m digisac.Message) json.RawMessage { return m.Raw },
+}
+
+// messageSender names who sent m: "me" or "contact".
+func messageSender(m digisac.Message) string {
+	if m.IsFromMe {
+		return "me"
+	}
+	return "contact"
+}
+
+func runMessagesList(ctx context.Context, stdout, stderr io.Writer, format outputFormat, p digisac.ListMessagesParams) error {
+	c, err := digisac.New()
+	if err != nil {
+		return err //nolint:wrapcheck // digisac.New's error is already the user-facing message ("not authenticated: run ...")
+	}
+
+	messages, err := c.ListMessages(ctx, p)
+	if err != nil {
+		return fmt.Errorf("list messages: %w", err)
+	}
+	return renderList(stdout, stderr, format, messages, messagesView)
+}
