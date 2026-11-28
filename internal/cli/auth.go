@@ -43,26 +43,26 @@ shell history. When stdin is not a terminal, the token is read from stdin.`,
   # Token from a secret manager, via stdin
   op read op://vault/digisac/token | digisac auth login --url https://acme.digisac.io/api/v1`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAuthLogin(cmd.Context(), url)
+			return runAuthLogin(cmd.Context(), cmd.InOrStdin(), cmd.ErrOrStderr(), url)
 		},
 	}
 	cmd.Flags().StringVar(&url, "url", "", "Digisac URL, with or without /api/v1")
 	return cmd
 }
 
-func runAuthLogin(ctx context.Context, url string) error {
-	in := bufio.NewReader(os.Stdin)
+func runAuthLogin(ctx context.Context, stdin io.Reader, stderr io.Writer, url string) error {
+	in := bufio.NewReader(stdin)
 
 	if url == "" {
-		fmt.Fprint(os.Stderr, "Digisac URL (e.g. https://acme.digisac.io/api/v1): ")
+		fmt.Fprint(stderr, "Digisac URL (e.g. https://acme.digisac.io/api/v1): ")
 		line, _ := in.ReadString('\n')
 		url = strings.TrimSpace(line)
 	}
 	var token string
-	if term.IsTerminal(int(os.Stdin.Fd())) {
-		fmt.Fprint(os.Stderr, "API token: ")
-		b, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Fprintln(os.Stderr)
+	if f, ok := stdin.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		fmt.Fprint(stderr, "API token: ")
+		b, err := term.ReadPassword(int(f.Fd()))
+		fmt.Fprintln(stderr)
 		if err != nil {
 			return err
 		}
@@ -84,7 +84,7 @@ func runAuthLogin(ctx context.Context, url string) error {
 		return err
 	}
 	path, _ := config.Path()
-	fmt.Fprintf(os.Stderr, "Logged in to %s (saved to %s)\n", cfg.URL, path)
+	fmt.Fprintf(stderr, "Logged in to %s (saved to %s)\n", cfg.URL, path)
 	return nil
 }
 

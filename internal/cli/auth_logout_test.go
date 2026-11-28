@@ -12,7 +12,7 @@ import (
 func savedConfig(t *testing.T) (env map[string]string, path string) {
 	t.Helper()
 	dir := t.TempDir()
-	path = filepath.Join(dir, "digisac", "config.json")
+	path = configPath(dir)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
