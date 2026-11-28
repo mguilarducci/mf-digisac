@@ -12,7 +12,6 @@ import (
 	"golang.org/x/term"
 
 	"github.com/mguilarducci/mf-digisac/internal/auth"
-	"github.com/mguilarducci/mf-digisac/internal/config"
 	"github.com/mguilarducci/mf-digisac/internal/digisac"
 )
 
@@ -72,20 +71,18 @@ func runAuthLogin(ctx context.Context, stdin io.Reader, stderr io.Writer, url st
 		line, _ := in.ReadString('\n')
 		token = line
 	}
-	token = strings.TrimSpace(token)
-	if url == "" || token == "" {
-		return fmt.Errorf("url and token are required")
-	}
-
-	cfg := &config.Config{URL: config.NormalizeURL(url), Token: token}
-	if _, err := digisac.NewWithCredentials(cfg.URL, cfg.Token).Me(ctx); err != nil {
-		return fmt.Errorf("token check failed: %w", err)
-	}
-	if err := config.Save(cfg); err != nil {
+	creds, err := auth.ParseLogin(url, strings.TrimSpace(token))
+	if err != nil {
 		return err
 	}
-	path, _ := config.Path()
-	fmt.Fprintf(stderr, "Logged in to %s (saved to %s)\n", cfg.URL, path)
+	if _, err := digisac.NewWithCredentials(creds.URL, creds.Token).Me(ctx); err != nil {
+		return fmt.Errorf("token check failed: %w", err)
+	}
+	path, err := auth.RecordLogin(creds)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stderr, "Logged in to %s (saved to %s)\n", creds.URL, path)
 	return nil
 }
 
@@ -126,7 +123,7 @@ func newAuthLogoutCmd() *cobra.Command {
 }
 
 func runAuthLogout(ctx context.Context, stderr io.Writer) error {
-	if err := config.Delete(); err != nil {
+	if err := auth.RemoveLogin(); err != nil {
 		return err
 	}
 	fmt.Fprintln(stderr, "Logged out.")

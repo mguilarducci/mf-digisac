@@ -1,7 +1,8 @@
 // Package config stores the saved login in
 // $XDG_CONFIG_HOME/digisac/config.json: where the file lives, reading it,
-// writing it owner-only, and deleting it. The credential rules (env
-// overrides, "not authenticated") live in the auth package.
+// writing it owner-only, and deleting it. Every credential rule (env
+// overrides, URL normalization, "not authenticated") lives in the auth
+// package, which is the only caller.
 package config
 
 import (
@@ -10,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type Config struct {
@@ -76,11 +76,4 @@ func Delete() error {
 		return err
 	}
 	return nil
-}
-
-// NormalizeURL strips trailing slashes and a trailing /api/v1, so both
-// https://x.digisac.io and https://x.digisac.io/api/v1 work. Only auth login
-// still calls it; it moves into auth when login does.
-func NormalizeURL(u string) string {
-	return strings.TrimSuffix(strings.TrimRight(u, "/"), "/api/v1")
 }
