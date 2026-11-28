@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/mguilarducci/mf-digisac/internal/auth"
 )
@@ -96,26 +97,72 @@ type Message struct {
 	ID        string          `json:"id"`
 	Timestamp string          `json:"timestamp"`
 	IsFromMe  bool            `json:"isFromMe"`
+	IsFromBot bool            `json:"isFromBot"`
 	Type      MessageType     `json:"type"`
 	Text      string          `json:"text"`
 	Raw       json.RawMessage `json:"-"`
+
+	deleted bool
 }
 
-// UnmarshalJSON decodes a message, tolerating a text that is not a string
-// (the API owns that shape): such a text is treated as empty.
+// UnmarshalJSON decodes a message, tolerating shapes the API owns: a text
+// that is not a string is treated as empty, and a deletedAt of any type
+// marks the message deleted unless it is null or "".
 func (m *Message) UnmarshalJSON(b []byte) error {
 	type alias Message
 	aux := struct {
 		*alias
 
-		Text json.RawMessage `json:"text"`
+		Text      json.RawMessage `json:"text"`
+		DeletedAt json.RawMessage `json:"deletedAt"`
 	}{alias: (*alias)(m)}
 	if err := json.Unmarshal(b, &aux); err != nil {
 		return fmt.Errorf("decode message: %w", err)
 	}
 	m.Text = stringOrEmpty(aux.Text)
+	m.deleted = isSet(aux.DeletedAt)
 	m.Raw = append(json.RawMessage(nil), b...)
 	return nil
+}
+
+// Sender is who sent a message.
+type Sender string
+
+const (
+	SenderSystem  Sender = "system"  // an internal entry (see MessageTypeTicket)
+	SenderBot     Sender = "bot"     // a bot, on the company's side
+	SenderMe      Sender = "me"      // an agent of the company
+	SenderContact Sender = "contact" // the contact
+)
+
+// Sender names who sent m: SenderSystem for internal entries, else
+// SenderBot, SenderMe or SenderContact, in that order of precedence.
+func (m Message) Sender() Sender {
+	switch {
+	case m.Type == MessageTypeTicket || m.Type == MessageTypeComment:
+		return SenderSystem
+	case m.IsFromBot:
+		return SenderBot
+	case m.IsFromMe:
+		return SenderMe
+	default:
+		return SenderContact
+	}
+}
+
+// IsDeleted reports whether m was deleted.
+func (m Message) IsDeleted() bool {
+	return m.deleted
+}
+
+// isSet reports whether raw holds a value other than null or "".
+func isSet(raw json.RawMessage) bool {
+	switch v := strings.TrimSpace(string(raw)); v {
+	case "", "null", `""`:
+		return false
+	default:
+		return true
+	}
 }
 
 // stringOrEmpty returns raw as a string if it is a JSON string, else "".

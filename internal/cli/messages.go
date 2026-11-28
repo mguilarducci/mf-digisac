@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -59,17 +60,34 @@ var messagesView = listView[digisac.Message]{
 	noun:    "messages",
 	headers: []string{"ID", "TIME", "FROM", "TYPE", "TEXT"},
 	row: func(m digisac.Message) []string {
-		return []string{m.ID, m.Timestamp, messageSender(m), string(m.Type), m.Text}
+		return []string{m.ID, m.Timestamp, string(m.Sender()), string(m.Type), messageText(m)}
 	},
 	raw: func(m digisac.Message) json.RawMessage { return m.Raw },
 }
 
-// messageSender names who sent m: "me" or "contact".
-func messageSender(m digisac.Message) string {
-	if m.IsFromMe {
-		return "me"
+// oneLine returns s with each CRLF and each other control character (line
+// breaks, tabs, escapes) replaced by a space, so it fits one table cell: the
+// tabwriter splits cells on tabs, and the others would break the row.
+func oneLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, strings.ReplaceAll(s, "\r\n", "\n"))
+}
+
+// messageText is what the TEXT column shows for m: [deleted] for a deleted
+// message, [<type>] for one whose text is empty or only whitespace, otherwise
+// its full text on one line (see oneLine).
+func messageText(m digisac.Message) string {
+	if m.IsDeleted() {
+		return "[deleted]"
 	}
-	return "contact"
+	if text := oneLine(m.Text); strings.TrimSpace(text) != "" {
+		return text
+	}
+	return "[" + string(m.Type) + "]"
 }
 
 func runMessagesList(ctx context.Context, stdout, stderr io.Writer, format outputFormat, p digisac.ListMessagesParams) error {
