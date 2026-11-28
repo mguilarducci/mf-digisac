@@ -80,12 +80,23 @@ func (c *Client) ListContacts(ctx context.Context, p ListContactsParams) ([]Cont
 	return collectPages[Contact](ctx, c, "/api/v1/contacts", url.Values{}, p.PageParams)
 }
 
+// MessageType is the kind of a message as the API names it, such as "chat",
+// "image", or one of the internal entries below.
+type MessageType string
+
+// Internal entries: they record what happened in the conversation rather
+// than something the contact or an agent sent.
+const (
+	MessageTypeTicket  MessageType = "ticket"
+	MessageTypeComment MessageType = "comment"
+)
+
 // Message keeps the fields the CLI prints; Raw holds the full object.
 type Message struct {
 	ID        string          `json:"id"`
 	Timestamp string          `json:"timestamp"`
 	IsFromMe  bool            `json:"isFromMe"`
-	Type      string          `json:"type"`
+	Type      MessageType     `json:"type"`
 	Text      string          `json:"text"`
 	Raw       json.RawMessage `json:"-"`
 }

@@ -59,7 +59,7 @@ var messagesView = listView[digisac.Message]{
 	noun:    "messages",
 	headers: []string{"ID", "TIME", "FROM", "TYPE", "TEXT"},
 	row: func(m digisac.Message) []string {
-		return []string{m.ID, m.Timestamp, messageSender(m), m.Type, m.Text}
+		return []string{m.ID, m.Timestamp, messageSender(m), string(m.Type), m.Text}
 	},
 	raw: func(m digisac.Message) json.RawMessage { return m.Raw },
 }
