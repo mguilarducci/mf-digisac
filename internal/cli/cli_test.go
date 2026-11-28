@@ -41,8 +41,15 @@ func run(t *testing.T, env map[string]string, stdin string, args ...string) (std
 
 const fakeToken = "tok_abcdefghijklmnop"
 
-// contactPages are the fake API's /api/v1/contacts responses, keyed by the
-// page query parameter. The listing spans two pages.
+// Paths of the fake API's endpoints.
+const (
+	mePath       = "/api/v1/me"
+	contactsPath = "/api/v1/contacts"
+	messagesPath = "/api/v1/messages"
+)
+
+// contactPages are the fake API's contacts responses, keyed by the page query
+// parameter. The listing spans two pages.
 var contactPages = map[string]string{
 	"1": `{"data":[` +
 		`{"id":"c1","name":"Ada Lovelace","serviceId":"s1","data":{"number":"5511999990001"}},` +
@@ -53,8 +60,8 @@ var contactPages = map[string]string{
 		`],"total":3,"lastPage":2}`,
 }
 
-// messagePages are the fake API's /api/v1/messages responses, keyed by the
-// page query parameter. The listing spans two pages, newest first.
+// messagePages are the fake API's messages responses, keyed by the page query
+// parameter. The listing spans two pages, newest first.
 var messagePages = map[string]string{
 	"1": `{"data":[` +
 		`{"id":"m2","timestamp":"2026-11-20T10:05:00.000Z","isFromMe":true,"type":"chat","text":"Hi Ada, how can I help?"},` +
@@ -65,93 +72,80 @@ var messagePages = map[string]string{
 		`],"total":3,"lastPage":2}`,
 }
 
-// fakeServer is a fake Digisac API. It answers /api/v1/contacts from
-// contactPages and /api/v1/messages from messagePages, both keyed by the page
-// query parameter. It records the page parameter of every contacts request
-// and the full query of every messages request it gets.
+// routes maps each path of the fake API to its responses, keyed by the page
+// query parameter; a request without one is answered from the "" key.
+type routes map[string]map[string]string
+
+// defaultRoutes are the endpoints the fake API serves unless a test overrides
+// them. Adding an endpoint is one entry here.
+var defaultRoutes = routes{
+	mePath:       {"": `{"id":"u1","name":"Ada Lovelace","email":"ada@example.com"}`},
+	contactsPath: contactPages,
+	messagesPath: messagePages,
+}
+
+// fakeServer is a fake Digisac API serving routes. It records the query of
+// every request it answers, per path.
 type fakeServer struct {
 	*httptest.Server
 
-	contactPages map[string]string
-	messagePages map[string]string
+	routes routes
 
-	mu             sync.Mutex
-	requested      []string
-	messageQueries []url.Values
+	mu      sync.Mutex
+	queries map[string][]url.Values
 }
 
-// requestedContactPages returns the page parameters of the contacts requests
-// served so far, in order.
-func (f *fakeServer) requestedContactPages() []string {
+// requestedQueries returns the queries of the requests to path served so far,
+// in order.
+func (f *fakeServer) requestedQueries(path string) []url.Values {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]string(nil), f.requested...)
+	return append([]url.Values(nil), f.queries[path]...)
 }
 
-// requestedMessageQueries returns the queries of the messages requests served
-// so far, in order.
-func (f *fakeServer) requestedMessageQueries() []url.Values {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]url.Values(nil), f.messageQueries...)
+// pageNumbers returns the page parameter of each query, in order.
+func pageNumbers(queries []url.Values) []string {
+	pages := make([]string, len(queries))
+	for i, q := range queries {
+		pages[i] = q.Get("page")
+	}
+	return pages
 }
 
-// fakeDigisac serves the parts of the Digisac API the CLI uses, with
-// contactPages as the contacts listing and messagePages as the messages
-// listing. Requests without "Authorization: Bearer <fakeToken>" get 401.
-func fakeDigisac(t *testing.T) *fakeServer {
+// fakeDigisac serves defaultRoutes, with each path in overrides replacing the
+// default one. Requests without "Authorization: Bearer <fakeToken>" get 401;
+// an unknown path or page gets 404.
+func fakeDigisac(t *testing.T, overrides ...routes) *fakeServer {
 	t.Helper()
-	return newFakeDigisac(t, contactPages, messagePages)
-}
-
-// fakeDigisacWithContacts is fakeDigisac with pages as the contacts listing.
-func fakeDigisacWithContacts(t *testing.T, pages map[string]string) *fakeServer {
-	t.Helper()
-	return newFakeDigisac(t, pages, messagePages)
-}
-
-// fakeDigisacWithMessages is fakeDigisac with pages as the messages listing.
-func fakeDigisacWithMessages(t *testing.T, pages map[string]string) *fakeServer {
-	t.Helper()
-	return newFakeDigisac(t, contactPages, pages)
-}
-
-func newFakeDigisac(t *testing.T, contacts, messages map[string]string) *fakeServer {
-	t.Helper()
-	f := &fakeServer{contactPages: contacts, messagePages: messages}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if _, err := w.Write([]byte(`{"id":"u1","name":"Ada Lovelace","email":"ada@example.com"}`)); err != nil {
-			t.Error(err)
+	f := &fakeServer{routes: routes{}, queries: map[string][]url.Values{}}
+	for _, r := range append([]routes{defaultRoutes}, overrides...) {
+		for path, pages := range r {
+			f.routes[path] = pages
 		}
-	})
-	mux.HandleFunc("GET /api/v1/contacts", func(w http.ResponseWriter, r *http.Request) {
-		page := r.URL.Query().Get("page")
-		f.mu.Lock()
-		f.requested = append(f.requested, page)
-		f.mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		if _, err := w.Write([]byte(f.contactPages[page])); err != nil {
-			t.Error(err)
-		}
-	})
-	mux.HandleFunc("GET /api/v1/messages", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		f.mu.Lock()
-		f.messageQueries = append(f.messageQueries, q)
-		f.mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		if _, err := w.Write([]byte(f.messagePages[q.Get("page")])); err != nil {
-			t.Error(err)
-		}
-	})
+	}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+fakeToken {
 			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		mux.ServeHTTP(w, r)
+		pages, ok := f.routes[r.URL.Path]
+		if !ok || r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		f.mu.Lock()
+		f.queries[r.URL.Path] = append(f.queries[r.URL.Path], q)
+		f.mu.Unlock()
+		body, ok := pages[q.Get("page")]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Error(err)
+		}
 	}))
 	t.Cleanup(f.Close)
 	return f

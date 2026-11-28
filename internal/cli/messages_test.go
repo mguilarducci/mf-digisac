@@ -38,7 +38,7 @@ func TestMessagesListRequestQuery(t *testing.T) {
 		"page":             {"2"},
 		"perPage":          {"10"},
 	}}
-	if got := srv.requestedMessageQueries(); !reflect.DeepEqual(got, want) {
+	if got := srv.requestedQueries(messagesPath); !reflect.DeepEqual(got, want) {
 		t.Errorf("requested queries %v, want %v", got, want)
 	}
 }
@@ -56,18 +56,9 @@ func TestMessagesListRequiresContact(t *testing.T) {
 	if stdout != "" {
 		t.Errorf("stdout = %q, want empty", stdout)
 	}
-	if got := srv.requestedMessageQueries(); len(got) != 0 {
+	if got := srv.requestedQueries(messagesPath); len(got) != 0 {
 		t.Errorf("requested queries %v, want none", got)
 	}
-}
-
-// messagePageNumbers returns the page parameter of each query, in order.
-func messagePageNumbers(queries []url.Values) []string {
-	pages := make([]string, len(queries))
-	for i, q := range queries {
-		pages[i] = q.Get("page")
-	}
-	return pages
 }
 
 func TestMessagesListAll(t *testing.T) {
@@ -87,7 +78,7 @@ func TestMessagesListAll(t *testing.T) {
 	if !strings.Contains(stderr, "3 messages\n") {
 		t.Errorf("stderr = %q, want it to report 3 messages", stderr)
 	}
-	if got, want := messagePageNumbers(srv.requestedMessageQueries()), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
+	if got, want := pageNumbers(srv.requestedQueries(messagesPath)), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("requested pages %v, want %v (stop at lastPage)", got, want)
 	}
 }
@@ -95,12 +86,12 @@ func TestMessagesListAll(t *testing.T) {
 func TestMessagesListAllStopsOnEmptyPage(t *testing.T) {
 	// lastPage claims 5 pages, but data ends on page 1: page 2 comes back
 	// empty, so --all must stop there instead of asking for page 3.
-	srv := fakeDigisacWithMessages(t, map[string]string{
+	srv := fakeDigisac(t, routes{messagesPath: {
 		"1": `{"data":[` +
 			`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"type":"chat","text":"Hello"}` +
 			`],"total":1,"lastPage":5}`,
 		"2": `{"data":[],"total":1,"lastPage":5}`,
-	})
+	}})
 
 	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1", "--all")
 	if err != nil {
@@ -111,7 +102,7 @@ func TestMessagesListAllStopsOnEmptyPage(t *testing.T) {
 	if stdout != want {
 		t.Errorf("stdout =\n%s\nwant\n%s", stdout, want)
 	}
-	if got, want := messagePageNumbers(srv.requestedMessageQueries()), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
+	if got, want := pageNumbers(srv.requestedQueries(messagesPath)), []string{"1", "2"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("requested pages %v, want %v (stop on empty page)", got, want)
 	}
 }
@@ -119,12 +110,12 @@ func TestMessagesListAllStopsOnEmptyPage(t *testing.T) {
 func TestMessagesListJSONIsRawAPIObjects(t *testing.T) {
 	// Each message carries fields the CLI does not model and keys out of
 	// alphabetical order. -o json must print them as the API sent them.
-	srv := fakeDigisacWithMessages(t, map[string]string{
+	srv := fakeDigisac(t, routes{messagesPath: {
 		"1": `{"data":[` +
 			`{"text":"Olá, tudo bem?","id":"m1","isFromMe":false,"type":"chat","timestamp":"2026-11-20T10:00:00.000Z","contactId":"c1","data":{"ack":3}},` +
 			`{"zeta":1,"id":"m2","isFromMe":true,"type":"image","text":null,"timestamp":"2026-11-20T10:05:00.000Z"}` +
 			`],"total":2,"lastPage":1}`,
-	})
+	}})
 
 	stdout, stderr, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1", "-o", "json")
 	if err != nil {
@@ -162,9 +153,9 @@ func TestMessagesListJSONIsRawAPIObjects(t *testing.T) {
 
 func TestMessagesListEmptyJSON(t *testing.T) {
 	// An unknown contact, or one without messages, is just an empty listing.
-	srv := fakeDigisacWithMessages(t, map[string]string{
+	srv := fakeDigisac(t, routes{messagesPath: {
 		"1": `{"data":[],"total":0,"lastPage":1}`,
-	})
+	}})
 
 	stdout, stderr, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "unknown", "-o", "json")
 	if err != nil {
@@ -207,7 +198,7 @@ func TestMessagesListRejectsBlankContact(t *testing.T) {
 		if stdout != "" {
 			t.Errorf("--contact %q: stdout = %q, want empty", contact, stdout)
 		}
-		if got := srv.requestedMessageQueries(); len(got) != 0 {
+		if got := srv.requestedQueries(messagesPath); len(got) != 0 {
 			t.Errorf("--contact %q: requested queries %v, want none", contact, got)
 		}
 	}
@@ -219,7 +210,7 @@ func TestMessagesListDefaultPaging(t *testing.T) {
 	if _, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1"); err != nil {
 		t.Fatalf("messages list: %v", err)
 	}
-	queries := srv.requestedMessageQueries()
+	queries := srv.requestedQueries(messagesPath)
 	if len(queries) != 1 {
 		t.Fatalf("requested %d queries, want 1", len(queries))
 	}
@@ -234,13 +225,13 @@ func TestMessagesListDefaultPaging(t *testing.T) {
 func TestMessagesListNonStringTextCountsAsEmpty(t *testing.T) {
 	// The API owns the shape of text; a number, object or bool there must
 	// not break the listing. It is shown like an empty text.
-	srv := fakeDigisacWithMessages(t, map[string]string{
+	srv := fakeDigisac(t, routes{messagesPath: {
 		"1": `{"data":[` +
 			`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"type":"chat","text":42},` +
 			`{"id":"m2","timestamp":"2026-11-20T10:01:00.000Z","isFromMe":false,"type":"chat","text":{"body":"hi"}},` +
 			`{"id":"m3","timestamp":"2026-11-20T10:02:00.000Z","isFromMe":false,"type":"chat","text":true}` +
 			`],"total":3,"lastPage":1}`,
-	})
+	}})
 
 	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
 	if err != nil {
