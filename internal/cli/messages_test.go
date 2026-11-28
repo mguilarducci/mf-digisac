@@ -212,3 +212,21 @@ func TestMessagesListRejectsBlankContact(t *testing.T) {
 		}
 	}
 }
+
+func TestMessagesListDefaultPaging(t *testing.T) {
+	srv := fakeDigisac(t)
+
+	if _, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1"); err != nil {
+		t.Fatalf("messages list: %v", err)
+	}
+	queries := srv.requestedMessageQueries()
+	if len(queries) != 1 {
+		t.Fatalf("requested %d queries, want 1", len(queries))
+	}
+	if got := queries[0].Get("page"); got != "1" {
+		t.Errorf("page = %q, want %q", got, "1")
+	}
+	if got := queries[0].Get("perPage"); got != "40" {
+		t.Errorf("perPage = %q, want %q", got, "40")
+	}
+}
