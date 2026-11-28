@@ -262,7 +262,7 @@ const everyKindOfMessage = `{"data":[` +
 	`],"total":8,"lastPage":1}`
 
 func TestMessagesListEveryKindOfMessage(t *testing.T) {
-	srv := fakeDigisacWithMessages(t, map[string]string{"1": everyKindOfMessage})
+	srv := fakeDigisac(t, routes{messagesPath: {"1": everyKindOfMessage}})
 
 	stdout, stderr, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
 	if err != nil {
@@ -286,7 +286,7 @@ func TestMessagesListEveryKindOfMessage(t *testing.T) {
 }
 
 func TestMessagesListEveryKindOfMessageJSONIsRaw(t *testing.T) {
-	srv := fakeDigisacWithMessages(t, map[string]string{"1": everyKindOfMessage})
+	srv := fakeDigisac(t, routes{messagesPath: {"1": everyKindOfMessage}})
 
 	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1", "-o", "json")
 	if err != nil {
@@ -313,11 +313,11 @@ func TestMessagesListEveryKindOfMessageJSONIsRaw(t *testing.T) {
 func TestMessagesListFlattensControlCharacters(t *testing.T) {
 	// A tab would split the cell into a new tabwriter column; a bare CR or
 	// other control character would garble the terminal. Each becomes a space.
-	srv := fakeDigisacWithMessages(t, map[string]string{
+	srv := fakeDigisac(t, routes{messagesPath: {
 		"1": `{"data":[` +
 			`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"type":"chat","text":"a\tb\rc\u0000d\u001be\u007ff\u0085g"}` +
 			`],"total":1,"lastPage":1}`,
-	})
+	}})
 
 	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
 	if err != nil {
@@ -331,11 +331,11 @@ func TestMessagesListFlattensControlCharacters(t *testing.T) {
 }
 
 func TestMessagesListBlankTextShowsType(t *testing.T) {
-	srv := fakeDigisacWithMessages(t, map[string]string{
+	srv := fakeDigisac(t, routes{messagesPath: {
 		"1": `{"data":[` +
 			`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"type":"chat","text":" \n\t\r\n "}` +
 			`],"total":1,"lastPage":1}`,
-	})
+	}})
 
 	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
 	if err != nil {
@@ -350,11 +350,11 @@ func TestMessagesListBlankTextShowsType(t *testing.T) {
 
 func TestMessagesListDeletedWithoutTextShowsDeleted(t *testing.T) {
 	// Deleted wins over the [<type>] placeholder for empty text.
-	srv := fakeDigisacWithMessages(t, map[string]string{
+	srv := fakeDigisac(t, routes{messagesPath: {
 		"1": `{"data":[` +
 			`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"type":"image","text":null,"deletedAt":"2026-11-20T10:01:00.000Z"}` +
 			`],"total":1,"lastPage":1}`,
-	})
+	}})
 
 	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
 	if err != nil {
