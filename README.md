@@ -24,6 +24,7 @@ From a checkout: `mise run install`.
 ```sh
 mf digisac auth login
 mf digisac contacts list
+mf digisac messages list --contact <id>
 ```
 
 Credentials come from `mf digisac auth login` or the `DIGISAC_URL` / `DIGISAC_TOKEN` env vars.

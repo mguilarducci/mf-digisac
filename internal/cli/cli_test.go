@@ -198,6 +198,7 @@ func TestNotAuthenticated(t *testing.T) {
 	cases := [][]string{
 		{"auth", "status"},
 		{"contacts", "list"},
+		{"messages", "list", "--contact", "c1"},
 	}
 	for _, args := range cases {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
