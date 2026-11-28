@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -141,7 +142,7 @@ func TestAuthLoginRejectedTokenSavesNothing(t *testing.T) {
 	if err == nil {
 		t.Fatal("auth login with a rejected token succeeded, want error")
 	}
-	if _, statErr := os.Stat(configPath(os.Getenv("XDG_CONFIG_HOME"))); !os.IsNotExist(statErr) {
+	if _, statErr := os.Stat(configPath(os.Getenv("XDG_CONFIG_HOME"))); !errors.Is(statErr, os.ErrNotExist) {
 		t.Errorf("config file exists after rejected login (stat err = %v), want none", statErr)
 	}
 }
