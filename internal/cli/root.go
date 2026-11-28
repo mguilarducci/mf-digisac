@@ -40,13 +40,9 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print the plugin version",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			runVersion(cmd.OutOrStdout())
+			fmt.Fprintln(cmd.OutOrStdout(), "mf-digisac "+Version)
 		},
 	}
-}
-
-func runVersion(out io.Writer) {
-	fmt.Fprintln(out, "mf-digisac "+Version)
 }
 
 func isJSONOutput(cmd *cobra.Command) bool {
