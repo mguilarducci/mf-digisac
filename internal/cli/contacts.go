@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,63 +12,65 @@ import (
 	"github.com/mguilarducci/mf-digisac/internal/digisac"
 )
 
-var contactsCmd = &cobra.Command{
-	Use:     "contacts",
-	Aliases: []string{"contact"},
-	Short:   "Manage contacts",
-	Long:    `Commands for listing Digisac contacts.`,
-	Run:     func(cmd *cobra.Command, args []string) { _ = cmd.Help() },
+func newContactsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "contacts",
+		Aliases: []string{"contact"},
+		Short:   "Manage contacts",
+		Long:    `Commands for listing Digisac contacts.`,
+		Run:     func(cmd *cobra.Command, args []string) { _ = cmd.Help() },
+	}
+	cmd.AddCommand(newContactsListCmd())
+	return cmd
 }
 
-var contactsListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List contacts",
-	Example: `  # First page as a table
+func newContactsListCmd() *cobra.Command {
+	var p digisac.ListContactsParams
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List contacts",
+		Example: `  # First page as a table
   digisac contacts list
 
   # Every page, as JSON
   digisac contacts list --all -o json`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		page, _ := cmd.Flags().GetInt("page")
-		perPage, _ := cmd.Flags().GetInt("per-page")
-		all, _ := cmd.Flags().GetBool("all")
-
-		c, err := clientFromConfig()
-		if err != nil {
-			return err
-		}
-
-		contacts, err := c.ListContacts(cmd.Context(), digisac.ListContactsParams{Page: page, PerPage: perPage, All: all})
-		if err != nil {
-			return fmt.Errorf("list contacts: %w", err)
-		}
-
-		if isJSONOutput(cmd) {
-			raw := make([]json.RawMessage, len(contacts))
-			for i, ct := range contacts {
-				raw[i] = ct.Raw
-			}
-			return printJSON(raw)
-		}
-
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNAME\tNUMBER\tSERVICE")
-		for _, ct := range contacts {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ct.ID, ct.Name, ct.Data.Number, ct.ServiceID)
-		}
-		if err := w.Flush(); err != nil {
-			return err
-		}
-		fmt.Fprintf(os.Stderr, "%d contacts\n", len(contacts))
-		return nil
-	},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runContactsList(cmd.Context(), isJSONOutput(cmd), p)
+		},
+	}
+	cmd.Flags().IntVar(&p.Page, "page", 1, "Page number")
+	cmd.Flags().IntVar(&p.PerPage, "per-page", 40, "Items per page")
+	cmd.Flags().BoolVar(&p.All, "all", false, "Fetch every page")
+	return cmd
 }
 
-func init() {
-	rootCmd.AddCommand(contactsCmd)
-	contactsCmd.AddCommand(contactsListCmd)
+func runContactsList(ctx context.Context, jsonOut bool, p digisac.ListContactsParams) error {
+	c, err := clientFromConfig()
+	if err != nil {
+		return err
+	}
 
-	contactsListCmd.Flags().Int("page", 1, "Page number")
-	contactsListCmd.Flags().Int("per-page", 40, "Items per page")
-	contactsListCmd.Flags().Bool("all", false, "Fetch every page")
+	contacts, err := c.ListContacts(ctx, p)
+	if err != nil {
+		return fmt.Errorf("list contacts: %w", err)
+	}
+
+	if jsonOut {
+		raw := make([]json.RawMessage, len(contacts))
+		for i, ct := range contacts {
+			raw[i] = ct.Raw
+		}
+		return printJSON(os.Stdout, raw)
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tNAME\tNUMBER\tSERVICE")
+	for _, ct := range contacts {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ct.ID, ct.Name, ct.Data.Number, ct.ServiceID)
+	}
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "%d contacts\n", len(contacts))
+	return nil
 }
