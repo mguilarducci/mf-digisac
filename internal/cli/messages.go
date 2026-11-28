@@ -93,16 +93,16 @@ func oneLine(s string) string {
 }
 
 // messageText is what the TEXT column shows for m: [deleted] for a deleted
-// message, [<type>] for one without text, otherwise its full text on one line (see oneLine).
+// message, [<type>] for one whose text is empty or only whitespace, otherwise
+// its full text on one line (see oneLine).
 func messageText(m digisac.Message) string {
-	switch {
-	case m.DeletedAt != "":
+	if m.DeletedAt != "" {
 		return "[deleted]"
-	case m.Text == "":
-		return "[" + string(m.Type) + "]"
-	default:
-		return oneLine(m.Text)
 	}
+	if text := oneLine(m.Text); strings.TrimSpace(text) != "" {
+		return text
+	}
+	return "[" + string(m.Type) + "]"
 }
 
 func runMessagesList(ctx context.Context, stdout, stderr io.Writer, format outputFormat, p digisac.ListMessagesParams) error {
