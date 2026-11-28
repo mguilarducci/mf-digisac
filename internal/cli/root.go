@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -14,40 +15,34 @@ import (
 // Version will be linked by an ldflag during build.
 var Version = "dev"
 
-var rootCmd = &cobra.Command{
-	Use:           "digisac",
-	Short:         "digisac is a CLI for the Digisac API.",
-	Version:       Version,
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	Run:           func(cmd *cobra.Command, args []string) { _ = cmd.Help() },
-}
-
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print the plugin version",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintln(cmd.OutOrStdout(), "mf-digisac "+Version)
-	},
-}
-
-// Execute adds all child commands to the root command and runs it.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+// NewRootCmd builds the full command tree.
+func NewRootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "digisac",
+		Short:         "digisac is a CLI for the Digisac API.",
+		Version:       Version,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Run:           func(cmd *cobra.Command, args []string) { _ = cmd.Help() },
 	}
-}
-
-func init() {
 	// When run as an mf plugin (`mf digisac ...`), show that in help/usage.
 	if os.Getenv("MF_PLUGIN_NAME") != "" {
-		rootCmd.Annotations = map[string]string{cobra.CommandDisplayNameAnnotation: "mf digisac"}
+		cmd.Annotations = map[string]string{cobra.CommandDisplayNameAnnotation: "mf digisac"}
 	}
-	rootCmd.AddCommand(versionCmd)
-	rootCmd.PersistentFlags().StringP("output", "o", "table", "Output format: table or json")
+	cmd.PersistentFlags().StringP("output", "o", "table", "Output format: table or json")
+	cmd.AddCommand(newVersionCmd(), newAuthCmd(), newContactsCmd())
+	return cmd
+}
+
+func newVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the plugin version",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Fprintln(cmd.OutOrStdout(), "mf-digisac "+Version)
+		},
+	}
 }
 
 func isJSONOutput(cmd *cobra.Command) bool {
@@ -55,8 +50,8 @@ func isJSONOutput(cmd *cobra.Command) bool {
 	return out == "json"
 }
 
-func printJSON(v any) error {
-	enc := json.NewEncoder(os.Stdout)
+func printJSON(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
 }
