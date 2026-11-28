@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,7 +21,7 @@ func newAuthCmd() *cobra.Command {
 		Use:   "auth",
 		Short: "Manage Digisac credentials",
 		Long:  `Commands for saving, checking, and removing the Digisac URL and API token.`,
-		Run:   func(cmd *cobra.Command, args []string) { _ = cmd.Help() },
+		RunE:  func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	cmd.AddCommand(newAuthLoginCmd(), newAuthStatusCmd(), newAuthLogoutCmd())
 	return cmd
@@ -42,7 +43,7 @@ shell history. When stdin is not a terminal, the token is read from stdin.`,
 
   # Token from a secret manager, via stdin
   op read op://vault/digisac/token | digisac auth login --url https://acme.digisac.io/api/v1`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runAuthLogin(cmd.Context(), cmd.InOrStdin(), cmd.ErrOrStderr(), url)
 		},
 	}
@@ -55,7 +56,10 @@ func runAuthLogin(ctx context.Context, stdin io.Reader, stderr io.Writer, url st
 
 	if url == "" {
 		fmt.Fprint(stderr, "Digisac URL (e.g. https://acme.digisac.io/api/v1): ")
-		line, _ := in.ReadString('\n')
+		line, err := in.ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("read URL: %w", err)
+		}
 		url = strings.TrimSpace(line)
 	}
 	var token string
@@ -64,23 +68,26 @@ func runAuthLogin(ctx context.Context, stdin io.Reader, stderr io.Writer, url st
 		b, err := term.ReadPassword(int(f.Fd()))
 		fmt.Fprintln(stderr)
 		if err != nil {
-			return err
+			return fmt.Errorf("read token: %w", err)
 		}
 		token = string(b)
 	} else {
-		line, _ := in.ReadString('\n')
+		line, err := in.ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("read token: %w", err)
+		}
 		token = line
 	}
 	creds, err := auth.ParseLogin(url, strings.TrimSpace(token))
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid login: %w", err)
 	}
 	if _, err := digisac.NewWithCredentials(creds.URL, creds.Token).Me(ctx); err != nil {
 		return fmt.Errorf("token check failed: %w", err)
 	}
 	path, err := auth.RecordLogin(creds)
 	if err != nil {
-		return err
+		return fmt.Errorf("token verified but not saved: %w", err)
 	}
 	fmt.Fprintf(stderr, "Logged in to %s (saved to %s)\n", creds.URL, path)
 	return nil
@@ -90,7 +97,7 @@ func newAuthStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show which account the current credentials belong to",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runAuthStatus(cmd.Context(), cmd.OutOrStdout(), isJSONOutput(cmd))
 		},
 	}
@@ -99,11 +106,11 @@ func newAuthStatusCmd() *cobra.Command {
 func runAuthStatus(ctx context.Context, stdout io.Writer, jsonOut bool) error {
 	creds, err := auth.Current()
 	if err != nil {
-		return err
+		return err //nolint:wrapcheck // auth.Current's error is already the user-facing message ("not authenticated: run ...")
 	}
 	me, err := digisac.NewWithCredentials(creds.URL, creds.Token).Me(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("check token: %w", err)
 	}
 	if jsonOut {
 		return printJSON(stdout, me)
@@ -116,15 +123,15 @@ func newAuthLogoutCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Remove the saved credentials",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAuthLogout(cmd.Context(), cmd.ErrOrStderr())
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runAuthLogout(cmd.ErrOrStderr())
 		},
 	}
 }
 
-func runAuthLogout(ctx context.Context, stderr io.Writer) error {
+func runAuthLogout(stderr io.Writer) error {
 	if err := auth.RemoveLogin(); err != nil {
-		return err
+		return fmt.Errorf("log out: %w", err)
 	}
 	fmt.Fprintln(stderr, "Logged out.")
 	if os.Getenv("DIGISAC_TOKEN") != "" {

@@ -21,6 +21,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: jdx/mise-action@f10502fc09dadecfefb962fff68ce77213930204 # v4
       - run: mise run lint
+      # Same config as `mise run lint:go`, but the action annotates issues
+      # inline on the PR. The version is read from mise.toml so the two pins
+      # can't drift.
+      - name: Resolve golangci-lint version
+        id: golangci
+        run: |
+          version=$(sed -n "s/^golangci-lint = '\(.*\)'$/\1/p" mise.toml)
+          [ -n "$version" ] || { echo "could not read the golangci-lint version from mise.toml" >&2; exit 1; }
+          echo "version=v$version" >> "$GITHUB_OUTPUT"
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
+        with:
+          version: ${{ steps.golangci.outputs.version }}
 
   unit:
     strategy:

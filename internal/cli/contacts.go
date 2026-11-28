@@ -17,7 +17,7 @@ func newContactsCmd() *cobra.Command {
 		Aliases: []string{"contact"},
 		Short:   "Manage contacts",
 		Long:    `Commands for listing Digisac contacts.`,
-		Run:     func(cmd *cobra.Command, args []string) { _ = cmd.Help() },
+		RunE:    func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 	}
 	cmd.AddCommand(newContactsListCmd())
 	return cmd
@@ -33,7 +33,7 @@ func newContactsListCmd() *cobra.Command {
 
   # Every page, as JSON
   digisac contacts list --all -o json`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			format, err := listFormat(cmd)
 			if err != nil {
 				return err
@@ -60,7 +60,7 @@ var contactsView = listView[digisac.Contact]{
 func runContactsList(ctx context.Context, stdout, stderr io.Writer, format outputFormat, p digisac.ListContactsParams) error {
 	c, err := digisac.New()
 	if err != nil {
-		return err
+		return err //nolint:wrapcheck // digisac.New's error is already the user-facing message ("not authenticated: run ...")
 	}
 
 	contacts, err := c.ListContacts(ctx, p)

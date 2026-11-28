@@ -38,14 +38,14 @@ func Read() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) //nolint:gosec // path is built by Path from the user config dir, not from untrusted input
 	switch {
 	case err == nil:
 		if err := json.Unmarshal(raw, cfg); err != nil {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
 	case !errors.Is(err, os.ErrNotExist):
-		return nil, err
+		return nil, fmt.Errorf("read config: %w", err)
 	}
 	return cfg, nil
 }
@@ -57,13 +57,16 @@ func Save(cfg *Config) error {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
+		return fmt.Errorf("create config dir: %w", err)
 	}
 	raw, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("encode config: %w", err)
 	}
-	return os.WriteFile(path, raw, 0o600)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	return nil
 }
 
 // Delete removes the config file. A missing file is not an error.
@@ -73,7 +76,7 @@ func Delete() error {
 		return err
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+		return fmt.Errorf("delete config: %w", err)
 	}
 	return nil
 }

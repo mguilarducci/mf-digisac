@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/mguilarducci/mf-digisac/internal/auth"
 )
@@ -23,7 +24,7 @@ type Client struct {
 func New() (*Client, error) {
 	creds, err := auth.Current()
 	if err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck // auth.Current's error is already the user-facing message ("not authenticated: run ...")
 	}
 	return NewWithCredentials(creds.URL, creds.Token), nil
 }
@@ -55,7 +56,7 @@ type Contact struct {
 func (c *Contact) UnmarshalJSON(b []byte) error {
 	type alias Contact
 	if err := json.Unmarshal(b, (*alias)(c)); err != nil {
-		return err
+		return fmt.Errorf("decode contact: %w", err)
 	}
 	c.Raw = append(json.RawMessage(nil), b...)
 	return nil
@@ -83,8 +84,8 @@ func collectPages[T any](ctx context.Context, c *Client, path string, query url.
 		for k, v := range query {
 			q[k] = v
 		}
-		q.Set("page", fmt.Sprint(n))
-		q.Set("perPage", fmt.Sprint(perPage))
+		q.Set("page", strconv.Itoa(n))
+		q.Set("perPage", strconv.Itoa(perPage))
 		var res page[T]
 		if err := c.get(ctx, path+"?"+q.Encode(), &res); err != nil {
 			return nil, fmt.Errorf("page %d: %w", n, err)
@@ -108,21 +109,25 @@ func (c *Client) Me(ctx context.Context) (map[string]any, error) {
 func (c *Client) get(ctx context.Context, path string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("GET %s: build request: %w", path, err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		// The *url.Error from Do already names the method and URL.
+		return fmt.Errorf("send request: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("GET %s: read response: %w", path, err)
 	}
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("GET %s: %s: %s", path, resp.Status, raw)
 	}
-	return json.Unmarshal(raw, out)
+	if err := json.Unmarshal(raw, out); err != nil {
+		return fmt.Errorf("GET %s: decode response: %w", path, err)
+	}
+	return nil
 }
