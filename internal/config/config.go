@@ -1,7 +1,7 @@
-// Package config loads and saves the CLI credentials.
-//
-// Resolution order: DIGISAC_URL / DIGISAC_TOKEN env vars override the values
-// stored by `digisac auth login` in $XDG_CONFIG_HOME/digisac/config.json.
+// Package config stores the saved login in
+// $XDG_CONFIG_HOME/digisac/config.json: where the file lives, reading it,
+// writing it owner-only, and deleting it. The credential rules (env
+// overrides, "not authenticated") live in the auth package.
 package config
 
 import (
@@ -50,22 +50,6 @@ func Read() (*Config, error) {
 	return cfg, nil
 }
 
-// Load reads the config file (if any) and applies env var overrides.
-func Load() (*Config, error) {
-	cfg, err := Read()
-	if err != nil {
-		return nil, err
-	}
-	if v := os.Getenv("DIGISAC_URL"); v != "" {
-		cfg.URL = v
-	}
-	if v := os.Getenv("DIGISAC_TOKEN"); v != "" {
-		cfg.Token = v
-	}
-	cfg.URL = NormalizeURL(cfg.URL)
-	return cfg, nil
-}
-
 // Save writes the config file with owner-only permissions.
 func Save(cfg *Config) error {
 	path, err := Path()
@@ -95,7 +79,8 @@ func Delete() error {
 }
 
 // NormalizeURL strips trailing slashes and a trailing /api/v1, so both
-// https://x.digisac.io and https://x.digisac.io/api/v1 work.
+// https://x.digisac.io and https://x.digisac.io/api/v1 work. Only auth login
+// still calls it; it moves into auth when login does.
 func NormalizeURL(u string) string {
 	return strings.TrimSuffix(strings.TrimRight(u, "/"), "/api/v1")
 }

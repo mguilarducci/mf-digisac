@@ -7,9 +7,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-
-	"github.com/mguilarducci/mf-digisac/internal/config"
-	"github.com/mguilarducci/mf-digisac/internal/digisac"
 )
 
 // Version will be linked by an ldflag during build.
@@ -54,16 +51,4 @@ func printJSON(w io.Writer, v any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
-}
-
-// clientFromConfig builds an API client from the stored config and env vars.
-func clientFromConfig() (*digisac.Client, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, err
-	}
-	if cfg.URL == "" || cfg.Token == "" {
-		return nil, fmt.Errorf("not authenticated: run `digisac auth login` or set DIGISAC_URL and DIGISAC_TOKEN")
-	}
-	return digisac.New(cfg.URL, cfg.Token), nil
 }
