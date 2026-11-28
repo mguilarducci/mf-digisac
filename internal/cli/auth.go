@@ -120,18 +120,18 @@ func newAuthLogoutCmd() *cobra.Command {
 		Use:   "logout",
 		Short: "Remove the saved credentials",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAuthLogout(cmd.ErrOrStderr())
+			return runAuthLogout(cmd.Context(), cmd.ErrOrStderr())
 		},
 	}
 }
 
-func runAuthLogout(errOut io.Writer) error {
+func runAuthLogout(ctx context.Context, stderr io.Writer) error {
 	if err := config.Delete(); err != nil {
 		return err
 	}
-	fmt.Fprintln(errOut, "Logged out.")
+	fmt.Fprintln(stderr, "Logged out.")
 	if os.Getenv("DIGISAC_TOKEN") != "" {
-		fmt.Fprintln(errOut, "Note: DIGISAC_TOKEN is still set in your environment.")
+		fmt.Fprintln(stderr, "Note: DIGISAC_TOKEN is still set in your environment.")
 	}
 	return nil
 }
