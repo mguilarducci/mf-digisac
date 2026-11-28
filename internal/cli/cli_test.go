@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -97,5 +99,49 @@ func TestAuthStatusNotAuthenticated(t *testing.T) {
 	_, _, err := run(t, nil, "", "auth", "status")
 	if err == nil || !strings.HasPrefix(err.Error(), "not authenticated") {
 		t.Fatalf("err = %v, want not authenticated error", err)
+	}
+}
+
+// configPath returns the config file location inside the temp dir run set up.
+func configPath(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "digisac", "config.json")
+}
+
+func TestAuthLoginSavesVerifiedToken(t *testing.T) {
+	srv := fakeDigisac(t, fakeToken)
+
+	_, stderr, err := run(t, nil, fakeToken+"\n", "auth", "login", "--url", srv.URL+"/api/v1")
+	if err != nil {
+		t.Fatalf("auth login: %v", err)
+	}
+	path := configPath(t)
+	wantLine := "Logged in to " + srv.URL + " (saved to " + path + ")\n"
+	if !strings.HasSuffix(stderr, wantLine) {
+		t.Errorf("stderr = %q, want it to end with %q", stderr, wantLine)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	var got map[string]string
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("decode config %q: %v", raw, err)
+	}
+	want := map[string]string{"url": srv.URL, "token": fakeToken}
+	if len(got) != len(want) || got["url"] != want["url"] || got["token"] != want["token"] {
+		t.Errorf("config = %v, want %v", got, want)
+	}
+}
+
+func TestAuthLoginRejectedTokenSavesNothing(t *testing.T) {
+	srv := fakeDigisac(t, fakeToken)
+
+	_, _, err := run(t, nil, "tok_wrong\n", "auth", "login", "--url", srv.URL+"/api/v1")
+	if err == nil {
+		t.Fatal("auth login with a rejected token succeeded, want error")
+	}
+	if _, statErr := os.Stat(configPath(t)); !os.IsNotExist(statErr) {
+		t.Errorf("config file exists after rejected login (stat err = %v), want none", statErr)
 	}
 }
