@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -79,11 +80,20 @@ func messageSender(m digisac.Message) string {
 	}
 }
 
-// lineBreaks matches each line break, so a multi-line text fits one table row.
-var lineBreaks = strings.NewReplacer("\r\n", " ", "\n", " ")
+// oneLine returns s with each CRLF and each other control character (line
+// breaks, tabs, escapes) replaced by a space, so it fits one table cell: the
+// tabwriter splits cells on tabs, and the others would break the row.
+func oneLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, strings.ReplaceAll(s, "\r\n", "\n"))
+}
 
 // messageText is what the TEXT column shows for m: [deleted] for a deleted
-// message, [<type>] for one without text, otherwise its full text on one line.
+// message, [<type>] for one without text, otherwise its full text on one line (see oneLine).
 func messageText(m digisac.Message) string {
 	switch {
 	case m.DeletedAt != "":
@@ -91,7 +101,7 @@ func messageText(m digisac.Message) string {
 	case m.Text == "":
 		return "[" + string(m.Type) + "]"
 	default:
-		return lineBreaks.Replace(m.Text)
+		return oneLine(m.Text)
 	}
 }
 
