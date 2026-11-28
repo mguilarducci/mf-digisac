@@ -347,3 +347,22 @@ func TestMessagesListBlankTextShowsType(t *testing.T) {
 		t.Errorf("stdout =\n%q\nwant\n%q", stdout, want)
 	}
 }
+
+func TestMessagesListDeletedWithoutTextShowsDeleted(t *testing.T) {
+	// Deleted wins over the [<type>] placeholder for empty text.
+	srv := fakeDigisacWithMessages(t, map[string]string{
+		"1": `{"data":[` +
+			`{"id":"m1","timestamp":"2026-11-20T10:00:00.000Z","isFromMe":false,"type":"image","text":null,"deletedAt":"2026-11-20T10:01:00.000Z"}` +
+			`],"total":1,"lastPage":1}`,
+	})
+
+	stdout, _, err := run(t, envCredentials(srv), "", "messages", "list", "--contact", "c1")
+	if err != nil {
+		t.Fatalf("messages list: %v", err)
+	}
+	want := "ID  TIME                      FROM     TYPE   TEXT\n" +
+		"m1  2026-11-20T10:00:00.000Z  contact  image  [deleted]\n"
+	if stdout != want {
+		t.Errorf("stdout =\n%q\nwant\n%q", stdout, want)
+	}
+}
