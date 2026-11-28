@@ -226,3 +226,4 @@ __marimo__/
 mise.local.toml
 bin/
 dist/
+.worktrees/
