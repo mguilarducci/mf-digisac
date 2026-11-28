@@ -72,11 +72,12 @@ func TestContactsListAllStopsOnEmptyPage(t *testing.T) {
 
 func TestContactsListJSONIsRawAPIObjects(t *testing.T) {
 	// Each contact carries fields the CLI does not model, keys out of
-	// alphabetical order and non-ASCII text. -o json must print them as the
-	// API sent them.
+	// alphabetical order, non-ASCII text and HTML-sensitive characters. -o
+	// json must print them as the API sent them, except that <, > and & are
+	// escaped as \u003c, \u003e and \u0026.
 	srv := fakeDigisacWithContacts(t, fakeToken, map[string]string{
 		"1": `{"data":[` +
-			`{"name":"José Ñúñez","id":"c1","serviceId":"s1","tags":["vip","São Paulo"],"data":{"number":"5511999990001","extra":true}},` +
+			`{"name":"José Ñúñez","id":"c1","serviceId":"s1","tags":["vip","São Paulo"],"note":"Tom & Jerry <tj@example.com>","data":{"number":"5511999990001","extra":true}},` +
 			`{"zeta":1,"id":"c2","name":"Zoë 日本","serviceId":"s2","data":{"number":"5511999990002"},"alpha":null}` +
 			`],"total":2,"lastPage":1}`,
 	})
@@ -94,6 +95,7 @@ func TestContactsListJSONIsRawAPIObjects(t *testing.T) {
       "vip",
       "São Paulo"
     ],
+    "note": "Tom \u0026 Jerry \u003ctj@example.com\u003e",
     "data": {
       "number": "5511999990001",
       "extra": true
