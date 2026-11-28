@@ -3,6 +3,7 @@
 go = "1.27.4"
 shellcheck = "0.11.0"
 golangci-lint = '2.15.0'
+"go:gotest.tools/gotestsum" = 'v1.13.0'
 "go:golang.org/x/vuln/cmd/govulncheck" = 'v1.10.0'
 goreleaser = '2.20.3'
 
@@ -17,7 +18,7 @@ run = "gofmt -s -w ."
 
 [tasks.test]
 description = "Run tests"
-run = "go test ./..."
+run = "gotestsum --format pkgname --format-icons text --format-hide-empty-pkg --hide-summary skipped -- ./..."
 
 [tasks."test:ci"]
 description = "Run tests with race detection"
