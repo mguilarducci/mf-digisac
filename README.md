@@ -32,11 +32,8 @@ Credentials come from `mf digisac auth login` or the `DIGISAC_URL` / `DIGISAC_TO
 
 Same flow as [mf-cli](https://github.com/mguilarducci/mf-cli):
 
-1. Ask Claude for "changelog for X.Y.Z". The `changelog` skill writes the
-   `CHANGELOG.md` entry from the PRs merged since the last tag. Commit it as
-   `X.Y.Z` on a `changelog-X-Y-Z` branch and merge it.
-2. `mise run release vX.Y.Z` tags and pushes.
-3. `.github/workflows/release.yml` runs GoReleaser and publishes the GitHub
-   release with that `CHANGELOG.md` section as the notes.
+1. `mise run release vX.Y.Z` tags and pushes.
+2. `.github/workflows/release.yml` runs GoReleaser and publishes the GitHub
+   release, with notes GitHub generates from the PRs merged since the last tag.
 
 `mise run release:snapshot` builds the same archives locally under `dist/`.
